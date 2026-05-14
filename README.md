@@ -1,6 +1,6 @@
 # claude
 
-LI for running Claude agents, skills, and slash commands via the Anthropic Agent SDK
+CLI for running Claude agents, skills, and slash commands via the Anthropic Agent SDK
 
 [![Version](https://img.shields.io/npm/v/@hesed/claude.svg)](https://npmjs.org/package/@hesed/claude)
 [![Downloads/week](https://img.shields.io/npm/dw/@hesed/claude.svg)](https://npmjs.org/package/@hesed/claude)
