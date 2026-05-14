@@ -11,7 +11,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.140",
     "@inquirer/prompts": "^8.2.0",
     "@oclif/core": "^4",
-    "@toon-format/toon": "^2.1.0",
+    "@toon-format/toon": "^2.2.0",
     "fs-extra": "^11.3.3"
   },
   "devDependencies": {
