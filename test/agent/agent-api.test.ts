@@ -168,6 +168,19 @@ describe('AgentApi', () => {
       expect(callArgs.options.allowedTools).to.deep.equal(['Read', 'Glob'])
       expect(callArgs.options.systemPrompt).to.equal('You are concise.')
     })
+
+    it('returns error when generator completes without emitting a result message', async () => {
+      const queryFn = makeQueryStub([
+        {message: {content: [{text: 'Thinking...'}]}, type: 'assistant'},
+        // no result message
+      ])
+
+      const api = new AgentApi(config, queryFn)
+      const result = await api.ask('hi')
+
+      expect(result.success).to.be.false
+      expect(String(result.error)).to.include('result')
+    })
   })
 
   describe('testConnection', () => {
@@ -213,7 +226,7 @@ describe('AgentApi', () => {
       await api.testConnection()
 
       const callArgs = queryFn.firstCall.args[0]
-      expect(callArgs.options.model).to.be.undefined
+      expect(callArgs.options.model).to.equal('haiku')
     })
 
     it('propagates failure from ask', async () => {
@@ -378,6 +391,48 @@ describe('AgentApi', () => {
 
       expect(result.success).to.be.true
       expect(result.data).to.deep.equal({agents: [], commands: [], mcpServers: [], skills: [], tools: []})
+    })
+
+    it('returns success when generator throws during cleanup after init is found', async () => {
+      const initMessage = {
+        agents: [],
+        // eslint-disable-next-line camelcase
+        mcp_servers: [],
+        skills: ['review'],
+        // eslint-disable-next-line camelcase
+        slash_commands: ['/help'],
+        subtype: 'init',
+        tools: ['Read'],
+        type: 'system',
+      }
+
+      let yieldedInit = false
+      const abortError = new Error('The operation was aborted')
+      abortError.name = 'AbortError'
+
+      const flakyQueryFn = stub().returns({
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              if (!yieldedInit) {
+                yieldedInit = true
+                return {done: false, value: initMessage}
+              }
+
+              throw abortError
+            },
+            async return() {
+              throw abortError
+            },
+          }
+        },
+      })
+
+      const api = new AgentApi(config, flakyQueryFn as any)
+      const result = await api.list()
+
+      expect(result.success).to.be.true
+      expect((result.data as any).skills).to.deep.equal(['review'])
     })
   })
 })

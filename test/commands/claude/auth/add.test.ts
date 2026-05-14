@@ -201,4 +201,36 @@ describe('agent auth add', () => {
     const writtenData = fsStub.outputJSON.firstCall.args[1]
     expect(writtenData.profiles.default.models).to.be.undefined
   })
+
+  it('does not write config when connection test fails', async () => {
+    testConnectionStub.resolves({error: '401', success: false})
+
+    const cmd = new AgentAuthAdd(['--key', 'bad-key', '--url', '', '--profile', 'default'], {
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'log')
+    stub(cmd, 'error')
+
+    await cmd.run()
+
+    expect(fsStub.outputJSON.called).to.be.false
+  })
+
+  it('writes config with spaces: 2 for readability', async () => {
+    testConnectionStub.resolves({data: {}, success: true})
+
+    const cmd = new AgentAuthAdd(['--key', 'sk-ant', '--url', '', '--profile', 'default'], {
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'log')
+
+    await cmd.run()
+
+    const writeOptions = fsStub.outputJSON.firstCall.args[2]
+    expect(writeOptions.spaces).to.equal(2)
+  })
 })

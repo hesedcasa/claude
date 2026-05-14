@@ -77,19 +77,20 @@ export default class AgentAuthUpdate extends Command {
       else delete models.haiku
     }
 
-    const updatedProfile = Object.keys(models).length > 0 ? {apiKey, apiUrl, models} : {apiKey, apiUrl}
-    const updatedConfig = {
-      ...existing,
-      profiles: {...profiles, [profileName]: updatedProfile},
-    }
-    await fs.writeJSON(configFilePath, updatedConfig, {mode: 0o600})
-
     action.start('Authenticating')
     const result = await testConnection({apiKey, apiUrl})
     clearClients()
 
     if (result.success) {
       action.stop('✓ successful')
+
+      const updatedProfile = Object.keys(models).length > 0 ? {apiKey, apiUrl, models} : {apiKey, apiUrl}
+      const updatedConfig = {
+        ...existing,
+        profiles: {...profiles, [profileName]: updatedProfile},
+      }
+      await fs.writeJSON(configFilePath, updatedConfig, {mode: 0o600, spaces: 2})
+
       const profileSuffix = profileName === 'default' ? '' : ` for profile '${profileName}'`
       this.log(`Agent authentication${profileSuffix} updated successfully`)
     } else {

@@ -54,7 +54,7 @@ describe('agent:ask', () => {
     formatAsToonStub.returns('toon-output')
   })
 
-  it('calls ask with the prompt, outputs JSON, and appends token summary', async () => {
+  it('calls ask with the prompt and outputs JSON', async () => {
     const cmd = new AgentAsk(['What is the capital of France?'], {
       configDir: '/tmp/test-agent-config',
       root: process.cwd(),
@@ -72,7 +72,7 @@ describe('agent:ask', () => {
     expect(clearClientsStub.calledOnce).to.be.true
     expect(logJsonStub.calledOnce).to.be.true
     expect(logJsonStub.firstCall.args[0]).to.deep.equal(mockResult)
-    expect(logStub.calledWith('Tokens: 1500 in / 250 out | cost: $0.0123 | turns: 3 | duration: 4.3s')).to.be.true
+    expect(logStub.called).to.be.false
   })
 
   it('does not log a summary line when result has no usage', async () => {
@@ -231,5 +231,59 @@ describe('agent:ask', () => {
 
     const opts = askStub.firstCall.args[2]
     expect(opts.model).to.equal('claude-opus-4-7')
+  })
+
+  it('builds workspace system prompt and sets cwd when workspace has repos', async () => {
+    readWorkspaceStub.resolves({'repo-a': '~/code/repo-a', 'repo-b': '~/code/repo-b'})
+
+    const cmd = new AgentAsk(['summarise changes', '--workspace', 'proj01'], {
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    const opts = askStub.firstCall.args[2]
+    expect(opts.systemPrompt).to.include('repo-a')
+    expect(opts.systemPrompt).to.include('repo-b')
+    expect(opts.additionalDirectories).to.deep.equal(['~/code/repo-a', '~/code/repo-b'])
+  })
+
+  it('filters workspace repos to --repo flag when provided', async () => {
+    readWorkspaceStub.resolves({'repo-a': '~/code/repo-a', 'repo-b': '~/code/repo-b'})
+
+    const cmd = new AgentAsk(['hi', '--workspace', 'proj01', '--repo', 'repo-a'], {
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    const opts = askStub.firstCall.args[2]
+    expect(opts.additionalDirectories).to.deep.equal(['~/code/repo-a'])
+    expect(opts.systemPrompt).to.include('repo-a')
+    expect(opts.systemPrompt).to.not.include('repo-b')
+  })
+
+  it('logs message and does not set workspace context when --repo not found in workspace', async () => {
+    readWorkspaceStub.resolves({'repo-a': '~/code/repo-a'})
+
+    const cmd = new AgentAsk(['hi', '--workspace', 'proj01', '--repo', 'missing'], {
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    const logStub = stub(cmd, 'log')
+    stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    expect(logStub.calledWith("Repo 'missing' not found in workspace 'proj01'")).to.be.true
+    const opts = askStub.firstCall.args[2]
+    expect(opts.additionalDirectories).to.be.undefined
   })
 })

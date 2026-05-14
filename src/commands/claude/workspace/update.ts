@@ -1,7 +1,7 @@
 import {input} from '@inquirer/prompts'
 import {Command, Flags} from '@oclif/core'
 
-import {deleteRepoFromWorkspace, readWorkspace, updateWorkspace, type WorkspaceRepos} from '../../../config.js'
+import {deleteRepoFromWorkspace, getDefaultWorkspace, readWorkspace, updateWorkspace, type WorkspaceRepos} from '../../../config.js'
 
 export default class AgentWorkspaceUpdate extends Command {
   static override args = {}
@@ -29,10 +29,10 @@ export default class AgentWorkspaceUpdate extends Command {
     const {flags} = await this.parse(AgentWorkspaceUpdate)
     const workspaceName = flags.workspace
 
-    const current = await readWorkspace(this.config.configDir, this.log.bind(this), workspaceName)
-    if (!current) return
+    const resolvedName = workspaceName ?? (await getDefaultWorkspace(this.config.configDir)) ?? 'default'
 
-    const resolvedName = workspaceName ?? 'default'
+    const current = await readWorkspace(this.config.configDir, this.log.bind(this), resolvedName)
+    if (!current) return
 
     if (flags['remove-repo'] && flags['remove-repo'].length > 0) {
       for (const repoName of flags['remove-repo']) {

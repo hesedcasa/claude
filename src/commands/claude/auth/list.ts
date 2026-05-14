@@ -35,7 +35,7 @@ export default class AgentAuthList extends Command {
     const profileList: ProfileInfo[] = Object.entries(profiles).map(([name, auth]) => ({
       ...(name === defaultProfile && {default: true}),
       ...(auth.models && Object.keys(auth.models).length > 0 && {models: auth.models}),
-      apiKey: `${auth.apiKey.slice(0, 7)}...${auth.apiKey.slice(-4)}`,
+      apiKey: auth.apiKey.length > 11 ? `${auth.apiKey.slice(0, 7)}...${auth.apiKey.slice(-4)}` : '***',
       apiUrl: auth.apiUrl || '(default)',
       name,
     }))

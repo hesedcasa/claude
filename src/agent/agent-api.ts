@@ -92,11 +92,13 @@ export class AgentApi {
       let model: string | undefined
       let usage: undefined | UsageSummary
       let errorSubtype: string | undefined
+      let resultSeen = false
 
       for await (const message of iterator as AsyncIterable<SDKMessage>) {
         if (message.type === 'assistant') {
           this.handleAssistantMessage(message, toolsUsed, options)
         } else if (message.type === 'result') {
+          resultSeen = true
           if (message.subtype === 'success') {
             finalText = message.result
             model = Object.keys(message.modelUsage ?? {})[0]
@@ -109,6 +111,10 @@ export class AgentApi {
 
       if (errorSubtype) {
         return {error: `Agent run ended with subtype: ${errorSubtype}`, success: false}
+      }
+
+      if (!resultSeen) {
+        return {error: 'Agent run completed without a result message', success: false}
       }
 
       return {data: {model, result: finalText, toolsUsed, usage} satisfies AskResult, success: true}
@@ -129,6 +135,7 @@ export class AgentApi {
    */
   async list(): Promise<ApiResult> {
     const controller = new AbortController()
+    let initData: ListResult | undefined
     try {
       const iterator = this.queryFn({
         options: {
@@ -141,22 +148,24 @@ export class AgentApi {
 
       for await (const message of iterator as AsyncIterable<SDKMessage>) {
         if (message.type === 'system' && message.subtype === 'init') {
+          initData = {
+            agents: message.agents ?? [],
+            commands: message.slash_commands ?? [],
+            mcpServers: message.mcp_servers ?? [],
+            skills: message.skills ?? [],
+            tools: message.tools ?? [],
+          } satisfies ListResult
           controller.abort()
-          return {
-            data: {
-              agents: message.agents ?? [],
-              commands: message.slash_commands ?? [],
-              mcpServers: message.mcp_servers ?? [],
-              skills: message.skills ?? [],
-              tools: message.tools ?? [],
-            } satisfies ListResult,
-            success: true,
-          }
+          return {data: initData, success: true}
         }
       }
 
       return {error: 'Agent did not emit an init message', success: false}
     } catch (error: unknown) {
+      if (initData) {
+        return {data: initData, success: true}
+      }
+
       const msg = error instanceof Error ? error.message : String(error)
       if (controller.signal.aborted) {
         return {error: 'Aborted before init message', success: false}

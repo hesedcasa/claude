@@ -81,4 +81,23 @@ describe('agent:auth:list', () => {
     expect(result.profiles).to.deep.equal([])
     expect(logStub.calledWith("No authentication profiles found. Run 'agent auth add' to add one.")).to.be.true
   })
+
+  it('shows *** for API keys shorter than 12 characters', async () => {
+    readProfilesStub.resolves({
+      default: {apiKey: 'short', apiUrl: ''},
+    })
+    getDefaultProfileStub.resolves('default')
+
+    const cmd = new AgentAuthList([], {
+      configDir: '/tmp/test-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'log')
+
+    const result = await cmd.run()
+
+    const def = result.profiles.find((p: any) => p.name === 'default')
+    expect(def.apiKey).to.equal('***')
+  })
 })

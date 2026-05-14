@@ -165,6 +165,38 @@ describe('agent:auth:update', () => {
     expect(written.profiles.default.models).to.deep.equal({opus: 'claude-opus-4-7', sonnet: 'claude-sonnet-4-6'})
   })
 
+  it('does not write config when connection test fails', async () => {
+    testConnectionStub.resolves({error: '401', success: false})
+
+    const cmd = new AgentAuthUpdate(['--key', 'bad-key'], {
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'log')
+    stub(cmd, 'error')
+
+    await cmd.run()
+
+    expect(fsStub.writeJSON.called).to.be.false
+  })
+
+  it('writes config with spaces: 2 for readability', async () => {
+    testConnectionStub.resolves({data: {}, success: true})
+
+    const cmd = new AgentAuthUpdate(['--key', 'new-key'], {
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'log')
+
+    await cmd.run()
+
+    const writeOptions = fsStub.writeJSON.firstCall.args[2]
+    expect(writeOptions.spaces).to.equal(2)
+  })
+
   it('clears a model mapping when flag is set to empty string', async () => {
     testConnectionStub.resolves({data: {}, success: true})
     fsStub.readJSON.resolves({

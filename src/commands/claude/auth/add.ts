@@ -35,6 +35,11 @@ export default class AgentAuthAdd extends Command {
     const profileName =
       flags.profile ?? (await input({default: 'default', message: 'Profile name:', required: process.stdout.isTTY}))
     const apiKey = flags.key ?? (await input({message: 'Anthropic API Key:', required: process.stdout.isTTY}))
+
+    if (!apiKey.trim()) {
+      this.error('API key is required.')
+    }
+
     const apiUrl =
       flags.url ?? (await input({default: '', message: 'Anthropic API base URL (optional):', required: false}))
 
@@ -58,17 +63,18 @@ export default class AgentAuthAdd extends Command {
     if (flags.sonnet) models.sonnet = flags.sonnet
     if (flags.haiku) models.haiku = flags.haiku
 
-    const isFirstProfile = Object.keys(profiles).length === 0
-    profiles[profileName] = Object.keys(models).length > 0 ? {apiKey, apiUrl, models} : {apiKey, apiUrl}
-    const defaultProfile = isFirstProfile ? profileName : existing.defaultProfile
-    await fs.outputJSON(configFilePath, {...existing, defaultProfile, profiles}, {mode: 0o600})
-
     action.start('Authenticating')
     const result = await testConnection({apiKey, apiUrl})
     clearClients()
 
     if (result.success) {
       action.stop('✓ successful')
+
+      const isFirstProfile = Object.keys(profiles).length === 0
+      profiles[profileName] = Object.keys(models).length > 0 ? {apiKey, apiUrl, models} : {apiKey, apiUrl}
+      const defaultProfile = isFirstProfile ? profileName : existing.defaultProfile
+      await fs.outputJSON(configFilePath, {...existing, defaultProfile, profiles}, {mode: 0o600, spaces: 2})
+
       const profileSuffix = profileName === 'default' ? '' : ` as profile '${profileName}'`
       this.log(`Agent authentication added${profileSuffix} successfully`)
     } else {

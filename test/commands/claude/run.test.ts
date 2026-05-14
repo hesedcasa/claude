@@ -28,7 +28,7 @@ describe('agent:run', () => {
     AgentRun = imported.default
   })
 
-  it('forwards slash command name, outputs JSON, and appends token summary', async () => {
+  it('forwards slash command name and outputs JSON without appending summary to stdout', async () => {
     const cmd = new AgentRun(['/help'], {
       configDir: '/tmp/test-agent-config',
       root: process.cwd(),
@@ -41,12 +41,10 @@ describe('agent:run', () => {
 
     expect(readAgentConfigStub.calledOnce).to.be.true
     expect(runStub.calledOnce).to.be.true
-    expect(runStub.firstCall.args[0]).to.deep.equal(mockAuth)
-    expect(runStub.firstCall.args[1]).to.equal('/help')
-    expect(runStub.firstCall.args[2]).to.be.undefined
     expect(clearClientsStub.calledOnce).to.be.true
     expect(logJsonStub.firstCall.args[0]).to.deep.equal(mockResult)
-    expect(logStub.calledWith('Tokens: 1500 in / 250 out | cost: $0.0123 | turns: 3 | duration: 4.3s')).to.be.true
+    const summaryCalls = logStub.getCalls().filter((c) => String(c.args[0] ?? '').startsWith('Tokens: '))
+    expect(summaryCalls).to.have.length(0)
   })
 
   it('does not log a summary line when result has no usage', async () => {

@@ -56,14 +56,27 @@ export async function setDefaultProfile(
   profile: string,
   log: (message: string) => void,
 ): Promise<void> {
-  const profiles = await readProfiles(configDir, log)
-  if (!profiles || !(profile in profiles)) {
+  const cp = configPath(configDir)
+  let raw: AgentConfigFile
+  try {
+    raw = await fs.readJSON(cp)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    if (msg.toLowerCase().includes('no such file or directory')) {
+      log('No authentication profiles found')
+    } else {
+      log(msg)
+    }
+
+    return
+  }
+
+  const profiles = (raw.profiles ?? {}) as Profiles
+  if (!(profile in profiles)) {
     log(`Profile '${profile}' not found`)
     return
   }
 
-  const cp = configPath(configDir)
-  const raw = await fs.readJSON(cp)
   raw.defaultProfile = profile
   await fs.outputJSON(cp, raw, {mode: 0o600, spaces: 2})
   log(`Default profile set to '${profile}'`)
@@ -92,9 +105,21 @@ export async function deleteProfile(
   log: (message: string) => void,
 ): Promise<boolean> {
   const cp = configPath(configDir)
-  const raw = await fs.readJSON(cp)
-  const profiles = (raw.profiles ?? {}) as Profiles
+  let raw: AgentConfigFile & Record<string, unknown>
+  try {
+    raw = await fs.readJSON(cp)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    if (msg.toLowerCase().includes('no such file or directory')) {
+      log('No authentication profiles found')
+    } else {
+      log(msg)
+    }
 
+    return false
+  }
+
+  const profiles = (raw.profiles ?? {}) as Profiles
   if (!(profile in profiles)) {
     log(`Profile '${profile}' not found`)
     return false
@@ -104,7 +129,7 @@ export async function deleteProfile(
 
   const remaining = Object.keys(profiles)
   if (raw.defaultProfile === profile) {
-    raw.defaultProfile = remaining[0] ?? null
+    raw.defaultProfile = remaining[0] ?? undefined
   }
 
   await fs.outputJSON(cp, {...raw, profiles}, {mode: 0o600, spaces: 2})
@@ -126,14 +151,27 @@ export async function setDefaultWorkspace(
   workspace: string,
   log: (message: string) => void,
 ): Promise<void> {
-  const workspaces = await readWorkspaces(configDir, log)
-  if (!workspaces || !(workspace in workspaces)) {
+  const cp = configPath(configDir)
+  let raw: AgentConfigFile
+  try {
+    raw = await fs.readJSON(cp)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    if (msg.toLowerCase().includes('no such file or directory')) {
+      log('No workspaces found')
+    } else {
+      log(msg)
+    }
+
+    return
+  }
+
+  const workspaces = (raw.workspaces ?? {}) as Workspaces
+  if (!(workspace in workspaces)) {
     log(`Workspace '${workspace}' not found`)
     return
   }
 
-  const cp = configPath(configDir)
-  const raw = await fs.readJSON(cp)
   raw.defaultWorkspace = workspace
   await fs.outputJSON(cp, raw, {mode: 0o600, spaces: 2})
   log(`Default workspace set to '${workspace}'`)
@@ -262,9 +300,21 @@ export async function deleteWorkspace(
   log: (message: string) => void,
 ): Promise<boolean> {
   const cp = configPath(configDir)
-  const raw = await fs.readJSON(cp)
-  const workspaces = (raw.workspaces ?? {}) as Workspaces
+  let raw: AgentConfigFile & Record<string, unknown>
+  try {
+    raw = await fs.readJSON(cp)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    if (msg.toLowerCase().includes('no such file or directory')) {
+      log('No workspaces found')
+    } else {
+      log(msg)
+    }
 
+    return false
+  }
+
+  const workspaces = (raw.workspaces ?? {}) as Workspaces
   if (!(workspace in workspaces)) {
     log(`Workspace '${workspace}' not found`)
     return false
@@ -274,7 +324,7 @@ export async function deleteWorkspace(
 
   const remaining = Object.keys(workspaces)
   if (raw.defaultWorkspace === workspace) {
-    raw.defaultWorkspace = remaining[0] ?? null
+    raw.defaultWorkspace = remaining[0] ?? undefined
   }
 
   await fs.outputJSON(cp, {...raw, workspaces}, {mode: 0o600, spaces: 2})
@@ -289,9 +339,21 @@ export async function deleteRepoFromWorkspace(
   log: (message: string) => void,
 ): Promise<boolean> {
   const cp = configPath(configDir)
-  const raw = await fs.readJSON(cp)
-  const workspaces = (raw.workspaces ?? {}) as Workspaces
+  let raw: AgentConfigFile & Record<string, unknown>
+  try {
+    raw = await fs.readJSON(cp)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    if (msg.toLowerCase().includes('no such file or directory')) {
+      log('No workspaces found')
+    } else {
+      log(msg)
+    }
 
+    return false
+  }
+
+  const workspaces = (raw.workspaces ?? {}) as Workspaces
   if (!(workspace in workspaces)) {
     log(`Workspace '${workspace}' not found`)
     return false

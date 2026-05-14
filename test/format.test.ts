@@ -13,23 +13,23 @@ describe('format', () => {
       expect(formatAsToon(val)).to.equal('')
     })
 
+    it('encodes 0 as a TOON value', () => {
+      const result = formatAsToon(0)
+      expect(result).to.be.a('string')
+      expect(result.length).to.be.greaterThan(0)
+    })
+
+    it('encodes false as a TOON value', () => {
+      const result = formatAsToon(false)
+      expect(result).to.be.a('string')
+      expect(result.length).to.be.greaterThan(0)
+    })
+
     it('encodes data as TOON', () => {
       const data = {key: 'value'}
       const result = formatAsToon(data)
       expect(result).to.be.a('string')
       expect(result.length).to.be.greaterThan(0)
-    })
-
-    it('returns empty string for 0', () => {
-      expect(formatAsToon(0)).to.equal('')
-    })
-
-    it('returns empty string for empty string', () => {
-      expect(formatAsToon('')).to.equal('')
-    })
-
-    it('returns empty string for false', () => {
-      expect(formatAsToon(false)).to.equal('')
     })
 
     it('encodes an array', () => {

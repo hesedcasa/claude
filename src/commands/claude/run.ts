@@ -1,8 +1,6 @@
 import {Args, Command, Flags} from '@oclif/core'
 
-import {type UsageSummary} from '../../agent/agent-api.js'
 import {clearClients, run} from '../../agent/agent-client.js'
-import {formatUsageSummary} from '../../agent/usage.js'
 import {readAgentConfig} from '../../config.js'
 import {formatAsToon} from '../../format.js'
 
@@ -55,9 +53,5 @@ export default class AgentRun extends Command {
     } else {
       this.logJson(result)
     }
-
-    const usage = (result.data as undefined | {usage?: UsageSummary})?.usage
-    const summary = formatUsageSummary(usage)
-    if (summary) this.log(summary)
   }
 }
