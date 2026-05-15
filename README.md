@@ -26,7 +26,7 @@ $ npm install -g @hesed/claude
 $ claude COMMAND
 running command...
 $ claude (--version)
-@hesed/claude/0.1.0 darwin-arm64 node-v22.14.0
+@hesed/claude/0.1.0 linux-x64 node-v20.20.2
 $ claude --help [COMMAND]
 USAGE
   $ claude COMMAND
@@ -95,12 +95,16 @@ Add Claude Agent SDK authentication
 
 ```
 USAGE
-  $ claude claude auth add [--json] [-k <value>] [-p <value>] [-u <value>]
+  $ claude claude auth add -p <value> -k <value> -u <value> [--json] [--opus <value>] [--sonnet <value>] [--haiku
+    <value>]
 
 FLAGS
-  -k, --key=<value>      Anthropic API key
-  -p, --profile=<value>  Profile name:
-  -u, --url=<value>      Anthropic API base URL (blank for default)
+  -k, --key=<value>      (required) Anthropic API key
+  -p, --profile=<value>  (required) Profile name:
+  -u, --url=<value>      (required) Anthropic API base URL (blank for default)
+      --haiku=<value>    Haiku model ID mapping (blank for default)
+      --opus=<value>     Opus model ID mapping (blank for default)
+      --sonnet=<value>   Sonnet model ID mapping (blank for default)
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -217,12 +221,16 @@ Update existing Claude Agent SDK authentication
 
 ```
 USAGE
-  $ claude claude auth update [--json] [-k <value>] [-p <value>] [-u <value>]
+  $ claude claude auth update -k <value> [--json] [-p <value>] [-u <value>] [--opus <value>] [--sonnet <value>] [--haiku
+    <value>]
 
 FLAGS
-  -k, --key=<value>      Anthropic API key
+  -k, --key=<value>      (required) Anthropic API key
   -p, --profile=<value>  Profile name to update (default: "default")
   -u, --url=<value>      Anthropic API base URL
+      --haiku=<value>    Haiku model ID mapping (blank to clear)
+      --opus=<value>     Opus model ID mapping (blank to clear)
+      --sonnet=<value>   Sonnet model ID mapping (blank to clear)
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -302,11 +310,11 @@ Add a workspace with named repository directories
 
 ```
 USAGE
-  $ claude claude workspace add [--json] [--repo <value>...] [-w <value>]
+  $ claude claude workspace add --repo <value>... -w <value> [--json]
 
 FLAGS
-  -w, --workspace=<value>  Workspace name
-      --repo=<value>...    Named repo entry as name=path (repeatable)
+  -w, --workspace=<value>  (required) Workspace name
+      --repo=<value>...    (required) Named repo entry as name=path (repeatable)
 
 GLOBAL FLAGS
   --json  Format output as json.
