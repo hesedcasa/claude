@@ -17,7 +17,7 @@ describe('agent:workspace:update', () => {
     getDefaultWorkspaceStub = stub()
 
     const imported = await esmock('../../../../src/commands/claude/workspace/update.js', {
-      '../../../../src/config.js': {
+      '../../../../src/workspaceConfig.js': {
         deleteRepoFromWorkspace: deleteRepoFromWorkspaceStub,
         getDefaultWorkspace: getDefaultWorkspaceStub,
         readWorkspace: readWorkspaceStub,

@@ -1,7 +1,7 @@
 import {input} from '@inquirer/prompts'
 import {Command, Flags} from '@oclif/core'
 
-import {addWorkspace, type WorkspaceRepos} from '../../../config.js'
+import {addWorkspace, type WorkspaceRepos} from '../../../workspaceConfig.js'
 
 export default class AgentWorkspaceAdd extends Command {
   static override args = {}
@@ -21,7 +21,8 @@ export default class AgentWorkspaceAdd extends Command {
 
   public async run(): Promise<void> {
     const {flags} = await this.parse(AgentWorkspaceAdd)
-    const workspaceName = flags.workspace ?? (await input({default: 'default', message: 'Workspace name:', required: true}))
+    const workspaceName =
+      flags.workspace ?? (await input({default: 'default', message: 'Workspace name:', required: true}))
 
     const repos: WorkspaceRepos = {}
 

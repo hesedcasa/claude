@@ -5,7 +5,7 @@ import {type SinonStub, stub} from 'sinon'
 
 describe('agent:list', () => {
   let AgentList: any
-  let readAgentConfigStub: SinonStub
+  let loadAgentConfigStub: SinonStub
   let listStub: SinonStub
   let clearClientsStub: SinonStub
   let formatAsToonStub: SinonStub
@@ -21,15 +21,15 @@ describe('agent:list', () => {
   const mockResult = {data: mockData, success: true}
 
   beforeEach(async () => {
-    readAgentConfigStub = stub().resolves(mockAuth)
+    loadAgentConfigStub = stub().resolves(mockAuth)
     listStub = stub().resolves(mockResult)
     clearClientsStub = stub()
     formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock('../../../src/commands/claude/list.js', {
       '../../../src/agent/agent-client.js': {clearClients: clearClientsStub, list: listStub},
-      '../../../src/config.js': {readAgentConfig: readAgentConfigStub},
-      '../../../src/format.js': {formatAsToon: formatAsToonStub},
+      '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
+      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     AgentList = imported.default
   })
@@ -44,14 +44,14 @@ describe('agent:list', () => {
 
     await cmd.run()
 
-    expect(readAgentConfigStub.calledOnce).to.be.true
+    expect(loadAgentConfigStub.calledOnce).to.be.true
     expect(listStub.calledOnceWith(mockAuth)).to.be.true
     expect(clearClientsStub.calledOnce).to.be.true
     expect(logJsonStub.firstCall.args[0]).to.deep.equal(mockResult)
   })
 
   it('returns early when config is missing', async () => {
-    readAgentConfigStub.resolves(null)
+    loadAgentConfigStub.resolves(null)
 
     const cmd = new AgentList([], {
       configDir: '/tmp/test-agent-config',
@@ -126,7 +126,7 @@ describe('agent:list', () => {
     expect(logStub.calledWith('toon-output')).to.be.true
   })
 
-  it('passes --profile to readAgentConfig', async () => {
+  it('passes --profile to loadAgentConfig', async () => {
     const cmd = new AgentList(['--profile', 'work'], {
       configDir: '/tmp/test-agent-config',
       root: process.cwd(),
@@ -136,6 +136,6 @@ describe('agent:list', () => {
 
     await cmd.run()
 
-    expect(readAgentConfigStub.firstCall.args[2]).to.equal('work')
+    expect(loadAgentConfigStub.firstCall.args[2]).to.equal('work')
   })
 })

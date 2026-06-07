@@ -1,6 +1,6 @@
 import {Command} from '@oclif/core'
 
-import {getDefaultWorkspace, readWorkspaces, type Workspaces} from '../../../config.js'
+import {getDefaultWorkspace, readWorkspaces, type Workspaces} from '../../../workspaceConfig.js'
 
 interface WorkspaceInfo {
   default?: boolean
@@ -24,7 +24,7 @@ export default class AgentWorkspaceList extends Command {
     const workspaces: undefined | Workspaces = await readWorkspaces(this.config.configDir, this.log.bind(this))
 
     if (!workspaces || Object.keys(workspaces).length === 0) {
-      this.log("No workspaces found. Run 'agent workspace add' to create one.")
+      this.log("No workspaces found. Run 'claude workspace add' to create one.")
       return {workspaces: []}
     }
 

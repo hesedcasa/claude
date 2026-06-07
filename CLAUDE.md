@@ -50,12 +50,14 @@ src/
 ### Key Architectural Patterns
 
 **1. Three-Tier Command Pattern:**
+
 - **Commands** (`src/commands/claude/`) — thin Oclif wrappers that parse args/flags
 - **Client Layer** (`agent-client.ts`) — functional wrappers with singleton `AgentApi` instance
 - **API Layer** (`agent-api.ts`) — `AgentApi` class that drives the SDK's `query()` async generator
 
 **2. ApiResult Pattern:**
 All API functions return `ApiResult`:
+
 ```typescript
 interface ApiResult {
   data?: unknown
@@ -69,19 +71,21 @@ interface ApiResult {
 
 **4. Profiles + Workspaces (config.ts):**
 Config lives at `~/.config/claude/claude-config.json`:
+
 ```json
 {
   "defaultProfile": "work",
   "defaultWorkspace": "proj01",
   "profiles": {
-    "default": { "apiKey": "sk-...", "apiUrl": "", "models": { "haiku": "...", "opus": "...", "sonnet": "..." } },
-    "work":    { "apiKey": "sk-...", "apiUrl": "https://custom/v1" }
+    "default": {"apiKey": "sk-...", "apiUrl": "", "models": {"haiku": "...", "opus": "...", "sonnet": "..."}},
+    "work": {"apiKey": "sk-...", "apiUrl": "https://custom/v1"}
   },
   "workspaces": {
-    "proj01": { "repo-a": "~/code/repo-a", "repo-b": "~/code/repo-b" }
+    "proj01": {"repo-a": "~/code/repo-a", "repo-b": "~/code/repo-b"}
   }
 }
 ```
+
 - `readAgentConfig(configDir, log, profileName?)` resolves the profile (falls back to `defaultProfile`).
 - `readWorkspace(configDir, log, workspaceName?)` resolves the workspace (falls back to `defaultWorkspace`) and returns a `Record<repoName, absPath>`.
 - When a workspace is loaded, `ask` builds a system prompt listing the repo directories, sets `cwd` to the common parent, and passes `additionalDirectories` to the SDK.
@@ -94,6 +98,7 @@ Config lives at `~/.config/claude/claude-config.json`:
 4. Use `readAgentConfig(this.config.configDir, this.log.bind(this), flags.profile)` (not the old `readConfig`)
 
 **Argument ordering:** when positional args are not alphabetically sorted, wrap with eslint-disable:
+
 ```typescript
 /* eslint-disable perfectionist/sort-objects */
 static override args = {

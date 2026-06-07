@@ -5,7 +5,7 @@ import {type SinonStub, stub} from 'sinon'
 
 describe('agent:ask', () => {
   let AgentAsk: any
-  let readAgentConfigStub: SinonStub
+  let loadAgentConfigStub: SinonStub
   let readWorkspaceStub: SinonStub
   let askStub: SinonStub
   let clearClientsStub: SinonStub
@@ -19,7 +19,7 @@ describe('agent:ask', () => {
   }
 
   before(async () => {
-    readAgentConfigStub = stub().resolves(mockAuth)
+    loadAgentConfigStub = stub().resolves(mockAuth)
     readWorkspaceStub = stub().resolves()
     askStub = stub().resolves(mockResult)
     clearClientsStub = stub()
@@ -27,13 +27,13 @@ describe('agent:ask', () => {
 
     const imported = await esmock('../../../src/commands/claude/ask.js', {
       '../../../src/agent/agent-client.js': {ask: askStub, clearClients: clearClientsStub},
-      '../../../src/config.js': {
+      '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
+      '../../../src/workspaceConfig.js': {
         commonParentDir: (dirs: string[]) => dirs[0] ?? process.cwd(),
         expandPath: (p: string) => p,
-        readAgentConfig: readAgentConfigStub,
         readWorkspace: readWorkspaceStub,
       },
-      '../../../src/format.js': {formatAsToon: formatAsToonStub},
+      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     AgentAsk = imported.default
   })
@@ -43,8 +43,8 @@ describe('agent:ask', () => {
   })
 
   beforeEach(() => {
-    readAgentConfigStub.reset()
-    readAgentConfigStub.resolves(mockAuth)
+    loadAgentConfigStub.reset()
+    loadAgentConfigStub.resolves(mockAuth)
     readWorkspaceStub.reset()
     readWorkspaceStub.resolves()
     askStub.reset()
@@ -65,7 +65,7 @@ describe('agent:ask', () => {
 
     await cmd.run()
 
-    expect(readAgentConfigStub.calledOnce).to.be.true
+    expect(loadAgentConfigStub.calledOnce).to.be.true
     expect(askStub.calledOnce).to.be.true
     expect(askStub.firstCall.args[0]).to.deep.equal(mockAuth)
     expect(askStub.firstCall.args[1]).to.equal('What is the capital of France?')
@@ -93,7 +93,7 @@ describe('agent:ask', () => {
   })
 
   it('returns early when config is missing', async () => {
-    readAgentConfigStub.resolves(null)
+    loadAgentConfigStub.resolves(null)
 
     const cmd = new AgentAsk(['hi'], {
       configDir: '/tmp/test-agent-config',
@@ -187,7 +187,7 @@ describe('agent:ask', () => {
     expect(opts.model).to.equal('claude-opus-4-7')
   })
 
-  it('passes --profile to readAgentConfig', async () => {
+  it('passes --profile to loadAgentConfig', async () => {
     const cmd = new AgentAsk(['hi', '--profile', 'work'], {
       configDir: '/tmp/test-agent-config',
       root: process.cwd(),
@@ -197,11 +197,11 @@ describe('agent:ask', () => {
 
     await cmd.run()
 
-    expect(readAgentConfigStub.firstCall.args[2]).to.equal('work')
+    expect(loadAgentConfigStub.firstCall.args[2]).to.equal('work')
   })
 
   it('resolves model shorthand from config.models', async () => {
-    readAgentConfigStub.resolves({
+    loadAgentConfigStub.resolves({
       ...mockAuth,
       models: {haiku: 'claude-haiku-4-5-20251001', opus: 'claude-opus-4-7', sonnet: 'claude-sonnet-4-6'},
     })

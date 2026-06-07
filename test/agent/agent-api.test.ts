@@ -210,7 +210,10 @@ describe('AgentApi', () => {
 
     it('uses haiku model from config.models when configured', async () => {
       const queryFn = makeQueryStub([{result: 'OK', subtype: 'success', type: 'result'}])
-      const configWithModels = {...config, models: {haiku: 'claude-haiku-4-5-20251001', opus: 'claude-opus-4-7', sonnet: 'claude-sonnet-4-6'}}
+      const configWithModels = {
+        ...config,
+        models: {haiku: 'claude-haiku-4-5-20251001', opus: 'claude-opus-4-7', sonnet: 'claude-sonnet-4-6'},
+      }
       const api = new AgentApi(configWithModels, queryFn)
 
       await api.testConnection()

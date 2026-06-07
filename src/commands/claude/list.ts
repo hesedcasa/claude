@@ -1,8 +1,8 @@
+import {formatAsToon} from '@hesed/plugin-lib'
 import {Command, Flags} from '@oclif/core'
 
 import {clearClients, list} from '../../agent/agent-client.js'
-import {readAgentConfig} from '../../config.js'
-import {formatAsToon} from '../../format.js'
+import {loadAgentConfig} from '../../agent/profile-config.js'
 
 type Filter = 'agents' | 'commands' | 'mcpServers' | 'skills' | 'tools'
 
@@ -15,7 +15,7 @@ export default class AgentList extends Command {
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --only skills',
     '<%= config.bin %> <%= command.id %> --only skills,commands --toon',
-    ]
+  ]
   static override flags = {
     only: Flags.string({
       description: `Comma-separated subset to return (${FILTERS.join('|')})`,
@@ -27,7 +27,7 @@ export default class AgentList extends Command {
 
   public async run(): Promise<void> {
     const {flags} = await this.parse(AgentList)
-    const config = await readAgentConfig(this.config.configDir, this.log.bind(this), flags.profile)
+    const config = await loadAgentConfig(this.config, this.log.bind(this), flags.profile)
     if (!config) return
 
     const result = await list(config)

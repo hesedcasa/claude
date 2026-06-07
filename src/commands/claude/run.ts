@@ -1,8 +1,8 @@
+import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags} from '@oclif/core'
 
 import {clearClients, run} from '../../agent/agent-client.js'
-import {readAgentConfig} from '../../config.js'
-import {formatAsToon} from '../../format.js'
+import {loadAgentConfig} from '../../agent/profile-config.js'
 
 /* eslint-disable perfectionist/sort-objects */
 export default class AgentRun extends Command {
@@ -30,7 +30,7 @@ export default class AgentRun extends Command {
 
   public async run(): Promise<void> {
     const {args, flags} = await this.parse(AgentRun)
-    const config = await readAgentConfig(this.config.configDir, this.log.bind(this), flags.profile)
+    const config = await loadAgentConfig(this.config, this.log.bind(this), flags.profile)
     if (!config) return
 
     const allowedTools = flags['allow-tools']

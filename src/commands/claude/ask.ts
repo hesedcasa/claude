@@ -1,8 +1,9 @@
+import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags} from '@oclif/core'
 
 import {ask, clearClients} from '../../agent/agent-client.js'
-import {commonParentDir, expandPath, readAgentConfig, readWorkspace} from '../../config.js'
-import {formatAsToon} from '../../format.js'
+import {loadAgentConfig} from '../../agent/profile-config.js'
+import {commonParentDir, expandPath, readWorkspace} from '../../workspaceConfig.js'
 
 export default class AgentAsk extends Command {
   static override args = {
@@ -26,12 +27,16 @@ export default class AgentAsk extends Command {
     stream: Flags.boolean({description: 'Stream assistant text as it arrives', required: false}),
     system: Flags.string({description: 'Custom system prompt for the agent', required: false}),
     toon: Flags.boolean({description: 'Format output as toon', required: false}),
-    workspace: Flags.string({char: 'w', description: 'Workspace name (uses default workspace if omitted)', required: false}),
+    workspace: Flags.string({
+      char: 'w',
+      description: 'Workspace name (uses default workspace if omitted)',
+      required: false,
+    }),
   }
 
   public async run(): Promise<void> {
     const {args, flags} = await this.parse(AgentAsk)
-    const config = await readAgentConfig(this.config.configDir, this.log.bind(this), flags.profile)
+    const config = await loadAgentConfig(this.config, this.log.bind(this), flags.profile)
     if (!config) return
 
     let systemPrompt = flags.system
@@ -60,9 +65,7 @@ export default class AgentAsk extends Command {
           .filter(Boolean)
       : []
 
-    const model = flags.model
-      ? (config.models?.[flags.model as 'haiku' | 'opus' | 'sonnet'] ?? flags.model)
-      : undefined
+    const model = flags.model ? (config.models?.[flags.model as 'haiku' | 'opus' | 'sonnet'] ?? flags.model) : undefined
 
     const result = await ask(config, args.prompt, {
       additionalDirectories,

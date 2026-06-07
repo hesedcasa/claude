@@ -1,7 +1,13 @@
 import {input} from '@inquirer/prompts'
 import {Command, Flags} from '@oclif/core'
 
-import {deleteRepoFromWorkspace, getDefaultWorkspace, readWorkspace, updateWorkspace, type WorkspaceRepos} from '../../../config.js'
+import {
+  deleteRepoFromWorkspace,
+  getDefaultWorkspace,
+  readWorkspace,
+  updateWorkspace,
+  type WorkspaceRepos,
+} from '../../../workspaceConfig.js'
 
 export default class AgentWorkspaceUpdate extends Command {
   static override args = {}
