@@ -252,12 +252,13 @@ List skills, slash commands, tools, subagents, and MCP servers the agent can use
 
 ```
 USAGE
-  $ claude claude list [--only <value>] [-p <value>] [--toon]
+  $ claude claude list [--only <value>] [-p <value>] [--toon] [-w <value>]
 
 FLAGS
-  -p, --profile=<value>  Authentication profile name
-      --only=<value>     Comma-separated subset to return (skills|commands|tools|agents|mcpServers)
-      --toon             Format output as toon
+  -p, --profile=<value>    Authentication profile name
+  -w, --workspace=<value>  Workspace name (uses default workspace if omitted)
+      --only=<value>       Comma-separated subset to return (skills|commands|tools|agents|mcpServers)
+      --toon               Format output as toon
 
 DESCRIPTION
   List skills, slash commands, tools, subagents, and MCP servers the agent can use
@@ -268,6 +269,8 @@ EXAMPLES
   $ claude claude list --only skills
 
   $ claude claude list --only skills,commands --toon
+
+  $ claude claude list --workspace proj01
 ```
 
 _See code: [src/commands/claude/list.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/list.ts)_

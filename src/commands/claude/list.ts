@@ -3,6 +3,7 @@ import {Command, Flags} from '@oclif/core'
 
 import {clearClients, list} from '../../agent/agent-client.js'
 import {loadAgentConfig} from '../../agent/profile-config.js'
+import {commonParentDir, expandPath, readWorkspace} from '../../workspaceConfig.js'
 
 type Filter = 'agents' | 'commands' | 'mcpServers' | 'skills' | 'tools'
 
@@ -15,6 +16,7 @@ export default class AgentList extends Command {
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --only skills',
     '<%= config.bin %> <%= command.id %> --only skills,commands --toon',
+    '<%= config.bin %> <%= command.id %> --workspace proj01',
   ]
   static override flags = {
     only: Flags.string({
@@ -23,6 +25,11 @@ export default class AgentList extends Command {
     }),
     profile: Flags.string({char: 'p', description: 'Authentication profile name', required: false}),
     toon: Flags.boolean({description: 'Format output as toon', required: false}),
+    workspace: Flags.string({
+      char: 'w',
+      description: 'Workspace name (uses default workspace if omitted)',
+      required: false,
+    }),
   }
 
   public async run(): Promise<void> {
@@ -30,7 +37,17 @@ export default class AgentList extends Command {
     const config = await loadAgentConfig(this.config, this.log.bind(this), flags.profile)
     if (!config) return
 
-    const result = await list(config)
+    let cwd = process.cwd()
+    let additionalDirectories: string[] | undefined
+
+    const repos = await readWorkspace(this.config.configDir, this.log.bind(this), flags.workspace)
+    if (repos && Object.keys(repos).length > 0) {
+      const expandedDirs = Object.values(repos).map((dir) => expandPath(dir))
+      cwd = commonParentDir(expandedDirs)
+      additionalDirectories = expandedDirs
+    }
+
+    const result = await list(config, {additionalDirectories, cwd})
     clearClients()
 
     const filtered = this.applyFilter(result, flags.only)

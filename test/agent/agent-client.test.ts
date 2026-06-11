@@ -80,9 +80,10 @@ describe('agent-client', () => {
   })
 
   describe('list', () => {
-    it('delegates to AgentApi.list', async () => {
-      const result = await listFn(mockConfig)
-      expect(mockApiInstance.list.calledOnce).to.be.true
+    it('delegates to AgentApi.list with options', async () => {
+      const opts = {additionalDirectories: ['/repo-a'], cwd: '/'}
+      const result = await listFn(mockConfig, opts)
+      expect(mockApiInstance.list.calledOnceWith(opts)).to.be.true
       expect(result).to.deep.equal({data: {skills: ['init']}, success: true})
     })
   })

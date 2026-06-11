@@ -133,13 +133,15 @@ export class AgentApi {
    * available to the current session. Reads the SDK's init system message
    * and aborts the run immediately afterwards.
    */
-  async list(): Promise<ApiResult> {
+  async list(options?: Pick<AskOptions, 'additionalDirectories' | 'cwd'>): Promise<ApiResult> {
     const controller = new AbortController()
     let initData: ListResult | undefined
     try {
       const iterator = this.queryFn({
         options: {
           abortController: controller,
+          additionalDirectories: options?.additionalDirectories,
+          cwd: options?.cwd,
           env: this.buildEnv(),
           permissionMode: 'bypassPermissions',
         },

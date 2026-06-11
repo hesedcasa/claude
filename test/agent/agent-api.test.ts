@@ -362,6 +362,20 @@ describe('AgentApi', () => {
       expect(callArgs.options.abortController).to.be.instanceOf(AbortController)
     })
 
+    it('passes workspace options to query', async () => {
+      const queryFn = makeQueryStub([
+        // eslint-disable-next-line camelcase
+        {agents: [], mcp_servers: [], skills: [], slash_commands: [], subtype: 'init', tools: [], type: 'system'},
+      ])
+      const api = new AgentApi(config, queryFn)
+
+      await api.list({additionalDirectories: ['/repo-a', '/repo-b'], cwd: '/repo-a'})
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.cwd).to.equal('/repo-a')
+      expect(callArgs.options.additionalDirectories).to.deep.equal(['/repo-a', '/repo-b'])
+    })
+
     it('returns error when no init message is emitted', async () => {
       const queryFn = makeQueryStub([{result: 'never', subtype: 'success', type: 'result'}])
       const api = new AgentApi(config, queryFn)

@@ -6,6 +6,7 @@ import {type SinonStub, stub} from 'sinon'
 describe('agent:list', () => {
   let AgentList: any
   let loadAgentConfigStub: SinonStub
+  let readWorkspaceStub: SinonStub
   let listStub: SinonStub
   let clearClientsStub: SinonStub
   let formatAsToonStub: SinonStub
@@ -22,6 +23,7 @@ describe('agent:list', () => {
 
   beforeEach(async () => {
     loadAgentConfigStub = stub().resolves(mockAuth)
+    readWorkspaceStub = stub().resolves()
     listStub = stub().resolves(mockResult)
     clearClientsStub = stub()
     formatAsToonStub = stub().returns('toon-output')
@@ -29,6 +31,11 @@ describe('agent:list', () => {
     const imported = await esmock('../../../src/commands/claude/list.js', {
       '../../../src/agent/agent-client.js': {clearClients: clearClientsStub, list: listStub},
       '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
+      '../../../src/workspaceConfig.js': {
+        commonParentDir: (dirs: string[]) => dirs[0] ?? process.cwd(),
+        expandPath: (p: string) => p,
+        readWorkspace: readWorkspaceStub,
+      },
       '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     AgentList = imported.default
@@ -45,7 +52,8 @@ describe('agent:list', () => {
     await cmd.run()
 
     expect(loadAgentConfigStub.calledOnce).to.be.true
-    expect(listStub.calledOnceWith(mockAuth)).to.be.true
+    expect(listStub.calledOnce).to.be.true
+    expect(listStub.firstCall.args[0]).to.deep.equal(mockAuth)
     expect(clearClientsStub.calledOnce).to.be.true
     expect(logJsonStub.firstCall.args[0]).to.deep.equal(mockResult)
   })
@@ -137,5 +145,23 @@ describe('agent:list', () => {
     await cmd.run()
 
     expect(loadAgentConfigStub.firstCall.args[2]).to.equal('work')
+  })
+
+  it('passes workspace directories to list options', async () => {
+    readWorkspaceStub.resolves({'repo-a': '~/code/repo-a', 'repo-b': '~/code/repo-b'})
+
+    const cmd = new AgentList(['--workspace', 'proj01'], {
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    expect(readWorkspaceStub.firstCall.args[2]).to.equal('proj01')
+    const opts = listStub.firstCall.args[1]
+    expect(opts.cwd).to.equal('~/code/repo-a')
+    expect(opts.additionalDirectories).to.deep.equal(['~/code/repo-a', '~/code/repo-b'])
   })
 })
