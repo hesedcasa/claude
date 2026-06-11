@@ -6,8 +6,9 @@ import {
   getDefaultWorkspace,
   readWorkspace,
   updateWorkspace,
+  type WorkspaceMode,
   type WorkspaceRepos,
-} from '../../../workspaceConfig.js'
+} from '../../../workspace-config.js'
 
 export default class AgentWorkspaceUpdate extends Command {
   static override args = {}
@@ -16,8 +17,15 @@ export default class AgentWorkspaceUpdate extends Command {
   static override examples = [
     '<%= config.bin %> <%= command.id %> --workspace proj01 --repo repo01=/new/path --repo repo03=/path/to/repo03',
     '<%= config.bin %> <%= command.id %> --workspace proj01 --remove-repo repo02',
+    '<%= config.bin %> <%= command.id %> --workspace proj01 --mode sandbox',
   ]
   static override flags = {
+    mode: Flags.string({
+      description:
+        "Workspace mode: 'local' exposes repo directories on the real filesystem, 'sandbox' mounts them (cloning git URLs) into a virtual bash where agent shell commands run (default: keep current mode)",
+      options: ['local', 'sandbox'],
+      required: false,
+    }),
     'remove-repo': Flags.string({
       description: 'Repo name to remove from the workspace (repeatable)',
       multiple: true,
@@ -49,7 +57,7 @@ export default class AgentWorkspaceUpdate extends Command {
       if (!flags.repo || flags.repo.length === 0) return
     }
 
-    const repos: WorkspaceRepos = {...current}
+    const repos: WorkspaceRepos = {...current.repos}
 
     if (flags.repo && flags.repo.length > 0) {
       for (const entry of flags.repo) {
@@ -60,9 +68,9 @@ export default class AgentWorkspaceUpdate extends Command {
 
         repos[entry.slice(0, sep)] = entry.slice(sep + 1)
       }
-    } else {
+    } else if (!flags.mode) {
       this.log(`Current repos for workspace '${resolvedName}':`)
-      for (const [name, dir] of Object.entries(current)) {
+      for (const [name, dir] of Object.entries(current.repos)) {
         this.log(`  ${name}: ${dir}`)
       }
 
@@ -71,13 +79,18 @@ export default class AgentWorkspaceUpdate extends Command {
         // eslint-disable-next-line no-await-in-loop
         const name = await input({message: 'Repo name (blank to finish):', required: false})
         if (!name) break
-        const defaultPath = current[name] ?? ''
+        const defaultPath = current.repos[name] ?? ''
         // eslint-disable-next-line no-await-in-loop
         const dir = await input({default: defaultPath, message: `Path for '${name}':`, prefill: 'tab', required: true})
         repos[name] = dir
       }
     }
 
-    await updateWorkspace(this.config.configDir, resolvedName, repos, this.log.bind(this))
+    await updateWorkspace(
+      this.config.configDir,
+      resolvedName,
+      {mode: flags.mode as undefined | WorkspaceMode, repos},
+      this.log.bind(this),
+    )
   }
 }

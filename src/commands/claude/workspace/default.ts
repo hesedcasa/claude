@@ -1,6 +1,6 @@
 import {Command, Flags} from '@oclif/core'
 
-import {getDefaultWorkspace, setDefaultWorkspace} from '../../../workspaceConfig.js'
+import {getDefaultWorkspace, setDefaultWorkspace} from '../../../workspace-config.js'
 
 export default class AgentWorkspaceDefault extends Command {
   static override args = {}

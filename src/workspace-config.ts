@@ -1,9 +1,15 @@
-/* eslint-disable unicorn/filename-case */
 import {default as fs} from 'fs-extra'
 import {default as path} from 'node:path'
 
+export type WorkspaceMode = 'local' | 'sandbox'
 export type WorkspaceRepos = Record<string, string>
-export type Workspaces = Record<string, WorkspaceRepos>
+
+export interface WorkspaceEntry {
+  mode: WorkspaceMode
+  repos: WorkspaceRepos
+}
+
+export type Workspaces = Record<string, WorkspaceEntry>
 
 interface WorkspaceConfigFile {
   defaultWorkspace?: string
@@ -95,7 +101,9 @@ export async function readWorkspace(
   configDir: string,
   log: (message: string) => void,
   workspaceName?: string,
-): Promise<undefined | WorkspaceRepos> {
+): Promise<undefined | WorkspaceEntry> {
+  if (!workspaceName) return undefined
+
   const cp = configPath(configDir)
   let file: WorkspaceConfigFile
   try {
@@ -112,25 +120,19 @@ export async function readWorkspace(
   }
 
   const workspaces = file.workspaces ?? {}
-  const resolvedName = workspaceName ?? file.defaultWorkspace
-  if (!resolvedName) {
-    if (workspaceName !== undefined) log('No workspace specified and no default workspace set')
+  const entry = workspaces[workspaceName]
+  if (!entry) {
+    log(`Workspace '${workspaceName}' not found. Run 'claude workspace add' to create.`)
     return undefined
   }
 
-  const repos = workspaces[resolvedName]
-  if (!repos) {
-    log(`Workspace '${resolvedName}' not found. Run 'claude workspace add' to create.`)
-    return undefined
-  }
-
-  return repos
+  return entry
 }
 
 export async function addWorkspace(
   configDir: string,
   workspace: string,
-  repos: WorkspaceRepos,
+  entry: {mode?: WorkspaceMode; repos: WorkspaceRepos},
   log: (message: string) => void,
 ): Promise<boolean> {
   const cp = configPath(configDir)
@@ -148,7 +150,7 @@ export async function addWorkspace(
   }
 
   const isFirst = Object.keys(workspaces).length === 0
-  workspaces[workspace] = repos
+  workspaces[workspace] = {mode: entry.mode ?? 'local', repos: entry.repos}
   const defaultWorkspace = isFirst ? workspace : existing.defaultWorkspace
   await fs.outputJSON(cp, {...existing, defaultWorkspace, workspaces}, {mode: 0o600, spaces: 2})
   log(`Workspace '${workspace}' added`)
@@ -158,7 +160,7 @@ export async function addWorkspace(
 export async function updateWorkspace(
   configDir: string,
   workspace: string,
-  repos: WorkspaceRepos,
+  entry: {mode?: WorkspaceMode; repos: WorkspaceRepos},
   log: (message: string) => void,
 ): Promise<boolean> {
   const cp = configPath(configDir)
@@ -182,7 +184,8 @@ export async function updateWorkspace(
     return false
   }
 
-  workspaces[workspace] = repos
+  const current = workspaces[workspace]
+  workspaces[workspace] = {mode: entry.mode ?? current.mode, repos: entry.repos}
   await fs.outputJSON(cp, {...existing, workspaces}, {mode: 0o600, spaces: 2})
   log(`Workspace '${workspace}' updated`)
   return true
@@ -253,13 +256,13 @@ export async function deleteRepoFromWorkspace(
     return false
   }
 
-  const repos = workspaces[workspace]
-  if (!(repoName in repos)) {
+  const entry = workspaces[workspace]
+  if (!(repoName in entry.repos)) {
     log(`Repo '${repoName}' not found in workspace '${workspace}'`)
     return false
   }
 
-  delete repos[repoName]
+  delete entry.repos[repoName]
   await fs.outputJSON(cp, {...raw, workspaces}, {mode: 0o600, spaces: 2})
   log(`Repo '${repoName}' removed from workspace '${workspace}'`)
   return true

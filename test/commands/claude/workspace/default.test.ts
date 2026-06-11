@@ -13,7 +13,7 @@ describe('agent:workspace:default', () => {
     setDefaultWorkspaceStub = stub().resolves(true)
 
     const imported = await esmock('../../../../src/commands/claude/workspace/default.js', {
-      '../../../../src/workspaceConfig.js': {
+      '../../../../src/workspace-config.js': {
         getDefaultWorkspace: getDefaultWorkspaceStub,
         setDefaultWorkspace: setDefaultWorkspaceStub,
       },

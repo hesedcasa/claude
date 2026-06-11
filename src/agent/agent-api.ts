@@ -1,4 +1,5 @@
-import {query, type SDKMessage} from '@anthropic-ai/claude-agent-sdk'
+import {createSdkMcpServer, type McpServerConfig, query, type SDKMessage, tool} from '@anthropic-ai/claude-agent-sdk'
+import {z} from 'zod'
 
 export interface ApiResult {
   data?: unknown
@@ -18,6 +19,8 @@ export interface AgentConfig {
   models?: ModelMap
 }
 
+export type SandboxExecFn = (command: string) => Promise<{exitCode: number; stderr: string; stdout: string}>
+
 export interface AskOptions {
   additionalDirectories?: string[]
   allowedTools?: string[]
@@ -25,6 +28,7 @@ export interface AskOptions {
   model?: string
   onText?: (text: string) => void
   onToolUse?: (toolName: string) => void
+  sandboxExec?: SandboxExecFn
   skills?: 'all' | string[]
   systemPrompt?: string
 }
@@ -54,6 +58,58 @@ interface ListResult {
 
 type QueryFn = typeof query
 
+const SANDBOX_BASH_TOOL = 'mcp__workspace-bash__bash'
+const SANDBOXED_BUILTIN_TOOLS = ['Bash', 'Edit', 'Glob', 'Grep', 'MultiEdit', 'NotebookEdit', 'Read', 'Write']
+
+interface SandboxTooling {
+  allowedTools?: string[]
+  disallowedTools?: string[]
+  mcpServers?: Record<string, McpServerConfig>
+}
+
+/**
+ * Resolve the tool-related query options for a run. With a sandbox, the
+ * built-in fs/shell tools are blocked, the sandbox bash tool is exposed,
+ * and a non-empty allow-list is extended to include it.
+ */
+function resolveToolOptions(options?: AskOptions): SandboxTooling {
+  if (!options?.sandboxExec) return {allowedTools: options?.allowedTools}
+
+  const sandbox = buildSandboxTooling(options.sandboxExec)
+  const allowedTools =
+    options.allowedTools && options.allowedTools.length > 0
+      ? [...options.allowedTools, SANDBOX_BASH_TOOL]
+      : options.allowedTools
+
+  return {...sandbox, allowedTools}
+}
+
+/**
+ * Expose the workspace sandbox as an in-process MCP `bash` tool and block
+ * the built-in filesystem/shell tools so every operation goes through the
+ * virtual filesystem instead of the real one.
+ */
+function buildSandboxTooling(sandboxExec: SandboxExecFn): SandboxTooling {
+  const bashTool = tool(
+    'bash',
+    'Run a bash command in the sandboxed workspace filesystem. Workspace repos are mounted under /workspace/<repoName>.',
+    {command: z.string().describe('Bash command to execute')},
+    async ({command}) => {
+      const result = await sandboxExec(command)
+      const text = [result.stdout, result.stderr].filter(Boolean).join('\n')
+      return {
+        content: [{text: text || `(exit code ${result.exitCode})`, type: 'text' as const}],
+        isError: result.exitCode !== 0,
+      }
+    },
+  )
+
+  return {
+    disallowedTools: SANDBOXED_BUILTIN_TOOLS,
+    mcpServers: {'workspace-bash': createSdkMcpServer({name: 'workspace-bash', tools: [bashTool]})},
+  }
+}
+
 /**
  * Claude Agent SDK client. Wraps the SDK's `query()` async generator
  * and surfaces a simple ask/testConnection API consistent with the
@@ -73,12 +129,16 @@ export class AgentApi {
    */
   async ask(prompt: string, options?: AskOptions): Promise<ApiResult> {
     try {
+      const toolOptions = resolveToolOptions(options)
+
       const iterator = this.queryFn({
         options: {
           additionalDirectories: options?.additionalDirectories,
-          allowedTools: options?.allowedTools,
+          allowedTools: toolOptions.allowedTools,
           cwd: options?.cwd,
+          disallowedTools: toolOptions.disallowedTools,
           env: this.buildEnv(),
+          mcpServers: toolOptions.mcpServers,
           model: options?.model,
           permissionMode: 'bypassPermissions',
           skills: options?.skills,

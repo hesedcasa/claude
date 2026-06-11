@@ -13,7 +13,7 @@ describe('agent:workspace:list', () => {
     readWorkspacesStub = stub()
 
     const imported = await esmock('../../../../src/commands/claude/workspace/list.js', {
-      '../../../../src/workspaceConfig.js': {
+      '../../../../src/workspace-config.js': {
         getDefaultWorkspace: getDefaultWorkspaceStub,
         readWorkspaces: readWorkspacesStub,
       },
@@ -23,8 +23,8 @@ describe('agent:workspace:list', () => {
 
   it('lists workspaces and marks the default', async () => {
     readWorkspacesStub.resolves({
-      proj01: {'repo-a': '/code/repo-a'},
-      proj02: {'repo-b': '/code/repo-b'},
+      proj01: {mode: 'local', repos: {'repo-a': '/code/repo-a'}},
+      proj02: {mode: 'sandbox', repos: {'repo-b': '/code/repo-b'}},
     })
     getDefaultWorkspaceStub.resolves('proj02')
 
@@ -40,10 +40,10 @@ describe('agent:workspace:list', () => {
     expect(readWorkspacesStub.calledOnce).to.be.true
     expect(readWorkspacesStub.firstCall.args[0]).to.equal('/tmp/test-config')
     expect(result.workspaces).to.deep.equal([
-      {name: 'proj01', repos: {'repo-a': '/code/repo-a'}},
-      {default: true, name: 'proj02', repos: {'repo-b': '/code/repo-b'}},
+      {mode: 'local', name: 'proj01', repos: {'repo-a': '/code/repo-a'}},
+      {default: true, mode: 'sandbox', name: 'proj02', repos: {'repo-b': '/code/repo-b'}},
     ])
-    expect(logStub.calledWith('proj02 (default):\n  repo-b: /code/repo-b')).to.be.true
+    expect(logStub.calledWith('proj02 (default) [sandbox]:\n  repo-b: /code/repo-b')).to.be.true
   })
 
   it('returns an empty list when no workspaces exist', async () => {

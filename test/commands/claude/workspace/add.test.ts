@@ -11,7 +11,7 @@ describe('agent:workspace:add', () => {
     addWorkspaceStub = stub().resolves(true)
 
     const imported = await esmock('../../../../src/commands/claude/workspace/add.js', {
-      '../../../../src/workspaceConfig.js': {addWorkspace: addWorkspaceStub},
+      '../../../../src/workspace-config.js': {addWorkspace: addWorkspaceStub},
       '@inquirer/prompts': {input: stub().resolves('')},
     })
     AgentWorkspaceAdd = imported.default
@@ -34,8 +34,11 @@ describe('agent:workspace:add', () => {
     expect(addWorkspaceStub.firstCall.args[0]).to.equal('/tmp/test-config')
     expect(addWorkspaceStub.firstCall.args[1]).to.equal('proj01')
     expect(addWorkspaceStub.firstCall.args[2]).to.deep.equal({
-      'repo-a': '/code/repo-a',
-      'repo-b': '/code/repo-b',
+      mode: 'local',
+      repos: {
+        'repo-a': '/code/repo-a',
+        'repo-b': '/code/repo-b',
+      },
     })
     expect(addWorkspaceStub.firstCall.args[3]).to.be.a('function')
   })

@@ -1,9 +1,11 @@
 import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags} from '@oclif/core'
+import {default as path} from 'node:path'
 
 import {ask, clearClients} from '../../agent/agent-client.js'
 import {loadAgentConfig} from '../../agent/profile-config.js'
-import {commonParentDir, expandPath, readWorkspace} from '../../workspaceConfig.js'
+import {buildWorkspaceContext, type WorkspaceContext} from '../../workspace-bash.js'
+import {readWorkspace} from '../../workspace-config.js'
 
 export default class AgentAsk extends Command {
   static override args = {
@@ -29,7 +31,7 @@ export default class AgentAsk extends Command {
     toon: Flags.boolean({description: 'Format output as toon', required: false}),
     workspace: Flags.string({
       char: 'w',
-      description: 'Workspace name (uses default workspace if omitted)',
+      description: 'Workspace name (uses current directory if omitted)',
       required: false,
     }),
   }
@@ -39,24 +41,24 @@ export default class AgentAsk extends Command {
     const config = await loadAgentConfig(this.config, this.log.bind(this), flags.profile)
     if (!config) return
 
-    let systemPrompt = flags.system
-    let cwd = process.cwd()
-    let additionalDirectories: string[] | undefined
-
-    const repos = await readWorkspace(this.config.configDir, this.log.bind(this), flags.workspace)
-    if (repos && Object.keys(repos).length > 0) {
-      const entries = flags.repo ? Object.entries(repos).filter(([name]) => name === flags.repo) : Object.entries(repos)
-      if (flags.repo && entries.length === 0) {
-        this.log(`Repo '${flags.repo}' not found in workspace '${flags.workspace ?? 'default'}'`)
-      } else if (entries.length > 0) {
-        const dirLines = entries.map(([name, dir]) => `  ${name}: ${dir}`).join('\n')
-        const workspaceContext = `Workspace directories:\n${dirLines}`
-        systemPrompt = flags.system ? `${flags.system}\n\n${workspaceContext}` : workspaceContext
-        const expandedDirs = entries.map(([, dir]) => expandPath(dir))
-        cwd = commonParentDir(expandedDirs)
-        additionalDirectories = expandedDirs
-      }
+    let workspaceContext: undefined | WorkspaceContext
+    const workspace = await readWorkspace(this.config.configDir, this.log.bind(this), flags.workspace)
+    if (workspace && Object.keys(workspace.repos).length > 0) {
+      workspaceContext = await buildWorkspaceContext({
+        cacheDir: path.join(this.config.dataDir, 'workspace-repos'),
+        log: this.log.bind(this),
+        mode: workspace.mode,
+        repoFilter: flags.repo,
+        repos: workspace.repos,
+        workspaceLabel: flags.workspace ?? 'default',
+      })
     }
+
+    const systemPrompt = workspaceContext
+      ? flags.system
+        ? `${flags.system}\n\n${workspaceContext.systemPrompt}`
+        : workspaceContext.systemPrompt
+      : flags.system
 
     const allowedTools = flags['allow-tools']
       ? flags['allow-tools']
@@ -68,12 +70,13 @@ export default class AgentAsk extends Command {
     const model = flags.model ? (config.models?.[flags.model as 'haiku' | 'opus' | 'sonnet'] ?? flags.model) : undefined
 
     const result = await ask(config, args.prompt, {
-      additionalDirectories,
+      additionalDirectories: workspaceContext?.additionalDirectories,
       allowedTools,
-      cwd,
+      cwd: workspaceContext?.cwd ?? process.cwd(),
       model,
       onText: flags.stream ? (text) => this.log(text) : undefined,
       onToolUse: flags.stream ? (name) => this.log(`[tool: ${name}]`) : undefined,
+      sandboxExec: workspaceContext?.sandboxExec,
       systemPrompt,
     })
     clearClients()

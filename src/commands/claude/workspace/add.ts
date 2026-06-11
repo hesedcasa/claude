@@ -1,7 +1,7 @@
 import {input} from '@inquirer/prompts'
 import {Command, Flags} from '@oclif/core'
 
-import {addWorkspace, type WorkspaceRepos} from '../../../workspaceConfig.js'
+import {addWorkspace, type WorkspaceMode, type WorkspaceRepos} from '../../../workspace-config.js'
 
 export default class AgentWorkspaceAdd extends Command {
   static override args = {}
@@ -9,10 +9,18 @@ export default class AgentWorkspaceAdd extends Command {
   static override enableJsonFlag = true
   static override examples = [
     '<%= config.bin %> <%= command.id %> --workspace proj01 --repo repo01=/path/to/repo01 --repo repo02=/path/to/repo02',
+    '<%= config.bin %> <%= command.id %> --workspace proj02 --mode sandbox --repo repo01=https://github.com/org/repo01.git',
   ]
   static override flags = {
+    mode: Flags.string({
+      default: 'local',
+      description:
+        "Workspace mode: 'local' exposes repo directories on the real filesystem, 'sandbox' mounts them (cloning git URLs) into a virtual bash where agent shell commands run",
+      options: ['local', 'sandbox'],
+      required: false,
+    }),
     repo: Flags.string({
-      description: 'Named repo entry as name=path (repeatable)',
+      description: 'Named repo entry as name=path or name=git-url (repeatable)',
       multiple: true,
       required: !process.stdout.isTTY,
     }),
@@ -51,6 +59,11 @@ export default class AgentWorkspaceAdd extends Command {
       this.error('At least one repository entry is required.')
     }
 
-    await addWorkspace(this.config.configDir, workspaceName, repos, this.log.bind(this))
+    await addWorkspace(
+      this.config.configDir,
+      workspaceName,
+      {mode: flags.mode as WorkspaceMode, repos},
+      this.log.bind(this),
+    )
   }
 }

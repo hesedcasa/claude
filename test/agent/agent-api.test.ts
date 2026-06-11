@@ -80,6 +80,42 @@ describe('AgentApi', () => {
       })
     })
 
+    it('exposes a workspace-bash MCP server and blocks built-in fs tools when sandboxExec is set', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+      const sandboxExec = stub().resolves({exitCode: 0, stderr: '', stdout: 'out'})
+
+      await api.ask('hi', {sandboxExec})
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.mcpServers).to.have.property('workspace-bash')
+      expect(callArgs.options.disallowedTools).to.include('Bash')
+      expect(callArgs.options.disallowedTools).to.include('Edit')
+      expect(callArgs.options.disallowedTools).to.include('Write')
+    })
+
+    it('appends the sandbox bash tool to a non-empty allowedTools list', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+      const sandboxExec = stub().resolves({exitCode: 0, stderr: '', stdout: 'out'})
+
+      await api.ask('hi', {allowedTools: ['WebFetch'], sandboxExec})
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.allowedTools).to.deep.equal(['WebFetch', 'mcp__workspace-bash__bash'])
+    })
+
+    it('does not configure sandbox tooling without sandboxExec', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+
+      await api.ask('hi')
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.mcpServers).to.be.undefined
+      expect(callArgs.options.disallowedTools).to.be.undefined
+    })
+
     it('forwards model option to queryFn', async () => {
       const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
       const api = new AgentApi(config, queryFn)

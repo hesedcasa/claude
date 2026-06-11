@@ -1,6 +1,6 @@
 import {Command, Flags} from '@oclif/core'
 
-import {deleteRepoFromWorkspace, deleteWorkspace, getDefaultWorkspace} from '../../../workspaceConfig.js'
+import {deleteRepoFromWorkspace, deleteWorkspace, getDefaultWorkspace} from '../../../workspace-config.js'
 
 export default class AgentWorkspaceDelete extends Command {
   static override args = {}

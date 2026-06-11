@@ -17,7 +17,7 @@ describe('agent:workspace:update', () => {
     getDefaultWorkspaceStub = stub()
 
     const imported = await esmock('../../../../src/commands/claude/workspace/update.js', {
-      '../../../../src/workspaceConfig.js': {
+      '../../../../src/workspace-config.js': {
         deleteRepoFromWorkspace: deleteRepoFromWorkspaceStub,
         getDefaultWorkspace: getDefaultWorkspaceStub,
         readWorkspace: readWorkspaceStub,
@@ -29,7 +29,7 @@ describe('agent:workspace:update', () => {
   })
 
   it('passes the actual default workspace name when --workspace is not provided', async () => {
-    readWorkspaceStub.resolves({'repo-a': '/code/repo-a'})
+    readWorkspaceStub.resolves({mode: 'local', repos: {'repo-a': '/code/repo-a'}})
     getDefaultWorkspaceStub.resolves('proj01')
 
     const cmd = new AgentWorkspaceUpdate(['--repo', 'repo-a=/code/repo-a-new'], {
@@ -46,7 +46,7 @@ describe('agent:workspace:update', () => {
   })
 
   it('passes the --workspace flag value when provided', async () => {
-    readWorkspaceStub.resolves({'repo-a': '/code/repo-a'})
+    readWorkspaceStub.resolves({mode: 'local', repos: {'repo-a': '/code/repo-a'}})
 
     const cmd = new AgentWorkspaceUpdate(['--workspace', 'myws', '--repo', 'repo-a=/new'], {
       configDir: '/tmp/test-config',
@@ -61,7 +61,7 @@ describe('agent:workspace:update', () => {
   })
 
   it('uses resolved name when removing repos', async () => {
-    readWorkspaceStub.resolves({'repo-a': '/code/repo-a', 'repo-b': '/code/repo-b'})
+    readWorkspaceStub.resolves({mode: 'local', repos: {'repo-a': '/code/repo-a', 'repo-b': '/code/repo-b'}})
     getDefaultWorkspaceStub.resolves('proj01')
 
     const cmd = new AgentWorkspaceUpdate(['--remove-repo', 'repo-a'], {

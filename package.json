@@ -13,7 +13,9 @@
     "@inquirer/prompts": "^8.2.0",
     "@oclif/core": "^4",
     "@toon-format/toon": "^2.1.0",
-    "fs-extra": "^11.3.3"
+    "fs-extra": "^11.3.3",
+    "just-bash": "^3.0.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/compat": "^2",
@@ -58,6 +60,10 @@
     "bin": "claude",
     "dirname": "claude",
     "commands": "./dist/commands",
+    "hooks": {
+      "command_not_found": "./dist/hooks/command-not-found.js",
+      "init": "./dist/hooks/init/register-capability-commands.js"
+    },
     "topicSeparator": " ",
     "topics": {},
     "update": {

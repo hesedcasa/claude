@@ -7,6 +7,7 @@ describe('agent:ask', () => {
   let AgentAsk: any
   let loadAgentConfigStub: SinonStub
   let readWorkspaceStub: SinonStub
+  let buildWorkspaceContextStub: SinonStub
   let askStub: SinonStub
   let clearClientsStub: SinonStub
   let formatAsToonStub: SinonStub
@@ -21,6 +22,7 @@ describe('agent:ask', () => {
   before(async () => {
     loadAgentConfigStub = stub().resolves(mockAuth)
     readWorkspaceStub = stub().resolves()
+    buildWorkspaceContextStub = stub().resolves()
     askStub = stub().resolves(mockResult)
     clearClientsStub = stub()
     formatAsToonStub = stub().returns('toon-output')
@@ -28,11 +30,8 @@ describe('agent:ask', () => {
     const imported = await esmock('../../../src/commands/claude/ask.js', {
       '../../../src/agent/agent-client.js': {ask: askStub, clearClients: clearClientsStub},
       '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
-      '../../../src/workspaceConfig.js': {
-        commonParentDir: (dirs: string[]) => dirs[0] ?? process.cwd(),
-        expandPath: (p: string) => p,
-        readWorkspace: readWorkspaceStub,
-      },
+      '../../../src/workspace-bash.js': {buildWorkspaceContext: buildWorkspaceContextStub},
+      '../../../src/workspace-config.js': {readWorkspace: readWorkspaceStub},
       '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     AgentAsk = imported.default
@@ -47,6 +46,8 @@ describe('agent:ask', () => {
     loadAgentConfigStub.resolves(mockAuth)
     readWorkspaceStub.reset()
     readWorkspaceStub.resolves()
+    buildWorkspaceContextStub.reset()
+    buildWorkspaceContextStub.resolves()
     askStub.reset()
     askStub.resolves(mockResult)
     clearClientsStub.reset()
@@ -233,11 +234,17 @@ describe('agent:ask', () => {
     expect(opts.model).to.equal('claude-opus-4-7')
   })
 
-  it('builds workspace system prompt and sets cwd when workspace has repos', async () => {
-    readWorkspaceStub.resolves({'repo-a': '~/code/repo-a', 'repo-b': '~/code/repo-b'})
+  it('applies workspace context to ask options when workspace has repos', async () => {
+    readWorkspaceStub.resolves({mode: 'local', repos: {'repo-a': '~/code/repo-a', 'repo-b': '~/code/repo-b'}})
+    buildWorkspaceContextStub.resolves({
+      additionalDirectories: ['/code/repo-a', '/code/repo-b'],
+      cwd: '/code',
+      systemPrompt: 'Workspace directories:\n  repo-a: ~/code/repo-a\n  repo-b: ~/code/repo-b',
+    })
 
     const cmd = new AgentAsk(['summarise changes', '--workspace', 'proj01'], {
       configDir: '/tmp/test-agent-config',
+      dataDir: '/tmp/test-agent-data',
       root: process.cwd(),
       runHook: stub().resolves({failures: [], successes: []}),
     } as any)
@@ -245,17 +252,26 @@ describe('agent:ask', () => {
 
     await cmd.run()
 
+    const wsArgs = buildWorkspaceContextStub.firstCall.args[0]
+    expect(wsArgs.mode).to.equal('local')
+    expect(wsArgs.repos).to.deep.equal({'repo-a': '~/code/repo-a', 'repo-b': '~/code/repo-b'})
+    expect(wsArgs.workspaceLabel).to.equal('proj01')
+
     const opts = askStub.firstCall.args[2]
     expect(opts.systemPrompt).to.include('repo-a')
-    expect(opts.systemPrompt).to.include('repo-b')
-    expect(opts.additionalDirectories).to.deep.equal(['~/code/repo-a', '~/code/repo-b'])
+    expect(opts.additionalDirectories).to.deep.equal(['/code/repo-a', '/code/repo-b'])
+    expect(opts.cwd).to.equal('/code')
+    expect(opts.sandboxExec).to.be.undefined
   })
 
-  it('filters workspace repos to --repo flag when provided', async () => {
-    readWorkspaceStub.resolves({'repo-a': '~/code/repo-a', 'repo-b': '~/code/repo-b'})
+  it('uses the workspace-configured sandbox mode and forwards sandboxExec to ask options', async () => {
+    readWorkspaceStub.resolves({mode: 'sandbox', repos: {'repo-a': '~/code/repo-a'}})
+    const sandboxExec = stub()
+    buildWorkspaceContextStub.resolves({sandboxExec, systemPrompt: 'sandboxed'})
 
     const cmd = new AgentAsk(['hi', '--workspace', 'proj01', '--repo', 'repo-a'], {
       configDir: '/tmp/test-agent-config',
+      dataDir: '/tmp/test-agent-data',
       root: process.cwd(),
       runHook: stub().resolves({failures: [], successes: []}),
     } as any)
@@ -263,27 +279,32 @@ describe('agent:ask', () => {
 
     await cmd.run()
 
+    const wsArgs = buildWorkspaceContextStub.firstCall.args[0]
+    expect(wsArgs.mode).to.equal('sandbox')
+    expect(wsArgs.repoFilter).to.equal('repo-a')
+
     const opts = askStub.firstCall.args[2]
-    expect(opts.additionalDirectories).to.deep.equal(['~/code/repo-a'])
-    expect(opts.systemPrompt).to.include('repo-a')
-    expect(opts.systemPrompt).to.not.include('repo-b')
+    expect(opts.sandboxExec).to.equal(sandboxExec)
+    expect(opts.systemPrompt).to.equal('sandboxed')
+    expect(opts.additionalDirectories).to.be.undefined
   })
 
-  it('logs message and does not set workspace context when --repo not found in workspace', async () => {
-    readWorkspaceStub.resolves({'repo-a': '~/code/repo-a'})
+  it('does not set workspace context when buildWorkspaceContext returns undefined', async () => {
+    readWorkspaceStub.resolves({mode: 'local', repos: {'repo-a': '~/code/repo-a'}})
+    buildWorkspaceContextStub.resolves()
 
     const cmd = new AgentAsk(['hi', '--workspace', 'proj01', '--repo', 'missing'], {
       configDir: '/tmp/test-agent-config',
+      dataDir: '/tmp/test-agent-data',
       root: process.cwd(),
       runHook: stub().resolves({failures: [], successes: []}),
     } as any)
-    const logStub = stub(cmd, 'log')
     stub(cmd, 'logJson')
 
     await cmd.run()
 
-    expect(logStub.calledWith("Repo 'missing' not found in workspace 'proj01'")).to.be.true
     const opts = askStub.firstCall.args[2]
     expect(opts.additionalDirectories).to.be.undefined
+    expect(opts.sandboxExec).to.be.undefined
   })
 })

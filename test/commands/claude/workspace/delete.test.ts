@@ -15,7 +15,7 @@ describe('agent:workspace:delete', () => {
     getDefaultWorkspaceStub = stub()
 
     const imported = await esmock('../../../../src/commands/claude/workspace/delete.js', {
-      '../../../../src/workspaceConfig.js': {
+      '../../../../src/workspace-config.js': {
         deleteRepoFromWorkspace: deleteRepoFromWorkspaceStub,
         deleteWorkspace: deleteWorkspaceStub,
         getDefaultWorkspace: getDefaultWorkspaceStub,

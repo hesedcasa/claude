@@ -1,9 +1,10 @@
 import {Command} from '@oclif/core'
 
-import {getDefaultWorkspace, readWorkspaces, type Workspaces} from '../../../workspaceConfig.js'
+import {getDefaultWorkspace, readWorkspaces, type WorkspaceMode, type Workspaces} from '../../../workspace-config.js'
 
 interface WorkspaceInfo {
   default?: boolean
+  mode: WorkspaceMode
   name: string
   repos: Record<string, string>
 }
@@ -29,17 +30,18 @@ export default class AgentWorkspaceList extends Command {
     }
 
     const defaultWorkspace = await getDefaultWorkspace(this.config.configDir)
-    const workspaceList: WorkspaceInfo[] = Object.entries(workspaces).map(([name, repos]) => ({
+    const workspaceList: WorkspaceInfo[] = Object.entries(workspaces).map(([name, entry]) => ({
       ...(name === defaultWorkspace && {default: true}),
+      mode: entry.mode,
       name,
-      repos,
+      repos: entry.repos,
     }))
 
     for (const ws of workspaceList) {
       const repoLines = Object.entries(ws.repos)
         .map(([n, p]) => `  ${n}: ${p}`)
         .join('\n')
-      this.log(`${ws.name}${ws.default ? ' (default):' : ':'}\n${repoLines}`)
+      this.log(`${ws.name}${ws.default ? ' (default)' : ''} [${ws.mode}]:\n${repoLines}`)
     }
 
     return {workspaces: workspaceList}

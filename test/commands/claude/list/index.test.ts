@@ -10,6 +10,7 @@ describe('agent:list', () => {
   let listStub: SinonStub
   let clearClientsStub: SinonStub
   let formatAsToonStub: SinonStub
+  let writeCapabilityStoreStub: SinonStub
 
   const mockAuth = {apiKey: 'sk-ant-test', apiUrl: 'https://api.anthropic.com'}
   const mockData = {
@@ -27,21 +28,27 @@ describe('agent:list', () => {
     listStub = stub().resolves(mockResult)
     clearClientsStub = stub()
     formatAsToonStub = stub().returns('toon-output')
+    writeCapabilityStoreStub = stub().resolves()
 
-    const imported = await esmock('../../../src/commands/claude/list.js', {
-      '../../../src/agent/agent-client.js': {clearClients: clearClientsStub, list: listStub},
-      '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
-      '../../../src/workspaceConfig.js': {
-        commonParentDir: (dirs: string[]) => dirs[0] ?? process.cwd(),
-        expandPath: (p: string) => p,
-        readWorkspace: readWorkspaceStub,
+    const imported = await esmock(
+      '../../../../src/commands/claude/list/index.js',
+      {},
+      {
+        '../../../../src/agent/agent-client.js': {clearClients: clearClientsStub, list: listStub},
+        '../../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
+        '../../../../src/capability-commands.js': {writeCapabilityStore: writeCapabilityStoreStub},
+        '../../../../src/workspace-config.js': {
+          commonParentDir: (dirs: string[]) => dirs[0] ?? process.cwd(),
+          expandPath: (p: string) => p,
+          readWorkspace: readWorkspaceStub,
+        },
+        '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
       },
-      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
-    })
+    )
     AgentList = imported.default
   })
 
-  it('lists all categories by default and outputs JSON', async () => {
+  it('lists all categories and outputs JSON', async () => {
     const cmd = new AgentList([], {
       configDir: '/tmp/test-agent-config',
       root: process.cwd(),
@@ -75,51 +82,6 @@ describe('agent:list', () => {
     expect(logJsonStub.called).to.be.false
   })
 
-  it('--only filters to requested keys', async () => {
-    const cmd = new AgentList(['--only', 'skills,commands'], {
-      configDir: '/tmp/test-agent-config',
-      root: process.cwd(),
-      runHook: stub().resolves({failures: [], successes: []}),
-    } as any)
-    const logJsonStub = stub(cmd, 'logJson')
-
-    await cmd.run()
-
-    const output = logJsonStub.firstCall.args[0]
-    expect(output).to.deep.equal({
-      data: {commands: ['help', 'clear'], skills: ['init', 'review']},
-      success: true,
-    })
-  })
-
-  it('--only with unknown key returns full result', async () => {
-    const cmd = new AgentList(['--only', 'bogus'], {
-      configDir: '/tmp/test-agent-config',
-      root: process.cwd(),
-      runHook: stub().resolves({failures: [], successes: []}),
-    } as any)
-    const logJsonStub = stub(cmd, 'logJson')
-
-    await cmd.run()
-
-    expect(logJsonStub.firstCall.args[0]).to.deep.equal(mockResult)
-  })
-
-  it('does not filter when result is unsuccessful', async () => {
-    listStub.resolves({error: 'boom', success: false})
-
-    const cmd = new AgentList(['--only', 'skills'], {
-      configDir: '/tmp/test-agent-config',
-      root: process.cwd(),
-      runHook: stub().resolves({failures: [], successes: []}),
-    } as any)
-    const logJsonStub = stub(cmd, 'logJson')
-
-    await cmd.run()
-
-    expect(logJsonStub.firstCall.args[0]).to.deep.equal({error: 'boom', success: false})
-  })
-
   it('outputs TOON format when --toon is used', async () => {
     const cmd = new AgentList(['--toon'], {
       configDir: '/tmp/test-agent-config',
@@ -147,8 +109,43 @@ describe('agent:list', () => {
     expect(loadAgentConfigStub.firstCall.args[2]).to.equal('work')
   })
 
+  it('writes the capability cache after a successful list', async () => {
+    const cmd = new AgentList([], {
+      cacheDir: '/tmp/test-agent-cache',
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    expect(writeCapabilityStoreStub.calledOnce).to.be.true
+    expect(writeCapabilityStoreStub.firstCall.args[0]).to.equal('/tmp/test-agent-cache')
+    expect(writeCapabilityStoreStub.firstCall.args[1]).to.deep.equal({
+      commands: ['help', 'clear'],
+      skills: ['init', 'review'],
+    })
+  })
+
+  it('does not write the capability cache when list fails', async () => {
+    listStub.resolves({error: 'boom', success: false})
+
+    const cmd = new AgentList([], {
+      cacheDir: '/tmp/test-agent-cache',
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    expect(writeCapabilityStoreStub.called).to.be.false
+  })
+
   it('passes workspace directories to list options', async () => {
-    readWorkspaceStub.resolves({'repo-a': '~/code/repo-a', 'repo-b': '~/code/repo-b'})
+    readWorkspaceStub.resolves({mode: 'local', repos: {'repo-a': '~/code/repo-a', 'repo-b': '~/code/repo-b'}})
 
     const cmd = new AgentList(['--workspace', 'proj01'], {
       configDir: '/tmp/test-agent-config',

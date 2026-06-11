@@ -1,11 +1,10 @@
-/* eslint-disable unicorn/filename-case */
 import {expect} from 'chai'
 import fs from 'fs-extra'
 import path from 'node:path'
 
-import {addWorkspace, deleteWorkspace, readWorkspace, updateWorkspace} from '../src/workspaceConfig.js'
+import {addWorkspace, deleteWorkspace, readWorkspace, updateWorkspace} from '../src/workspace-config.js'
 
-describe('workspaceConfig', () => {
+describe('workspace-config', () => {
   describe('readWorkspace', () => {
     const testConfigDir = path.join(process.cwd(), 'test-workspace-read')
     const testConfigPath = path.join(testConfigDir, 'claude-config.json')
@@ -18,25 +17,25 @@ describe('workspaceConfig', () => {
       await fs.remove(testConfigDir)
     })
 
-    it('returns repos for named workspace', async () => {
+    it('returns the workspace entry for a named workspace', async () => {
       const repos = {'repo-a': '~/code/repo-a'}
-      await fs.writeJSON(testConfigPath, {workspaces: {proj01: repos}})
+      await fs.writeJSON(testConfigPath, {workspaces: {proj01: {mode: 'sandbox', repos}}})
 
       const logs: string[] = []
       const result = await readWorkspace(testConfigDir, (msg) => logs.push(msg), 'proj01')
 
-      expect(result).to.deep.equal(repos)
+      expect(result).to.deep.equal({mode: 'sandbox', repos})
       expect(logs).to.be.empty
     })
 
-    it('resolves default workspace when workspaceName is omitted', async () => {
+    it('ignores defaultWorkspace and returns undefined when workspaceName is omitted', async () => {
       const repos = {'repo-b': '~/code/repo-b'}
-      await fs.writeJSON(testConfigPath, {defaultWorkspace: 'proj01', workspaces: {proj01: repos}})
+      await fs.writeJSON(testConfigPath, {defaultWorkspace: 'proj01', workspaces: {proj01: {mode: 'local', repos}}})
 
       const logs: string[] = []
       const result = await readWorkspace(testConfigDir, (msg) => logs.push(msg))
 
-      expect(result).to.deep.equal(repos)
+      expect(result).to.be.undefined
       expect(logs).to.be.empty
     })
 
@@ -83,19 +82,31 @@ describe('workspaceConfig', () => {
 
     it('adds workspace and sets it as default when it is the first', async () => {
       const logs: string[] = []
-      const result = await addWorkspace(testConfigDir, 'proj01', {'repo-a': '~/code/repo-a'}, (msg) => logs.push(msg))
+      const result = await addWorkspace(testConfigDir, 'proj01', {repos: {'repo-a': '~/code/repo-a'}}, (msg) =>
+        logs.push(msg),
+      )
 
       expect(result).to.be.true
       const saved = await fs.readJSON(testConfigPath)
-      expect(saved.workspaces.proj01).to.deep.equal({'repo-a': '~/code/repo-a'})
+      expect(saved.workspaces.proj01).to.deep.equal({mode: 'local', repos: {'repo-a': '~/code/repo-a'}})
       expect(saved.defaultWorkspace).to.equal('proj01')
+    })
+
+    it('stores the provided mode', async () => {
+      const logs: string[] = []
+      await addWorkspace(testConfigDir, 'proj01', {mode: 'sandbox', repos: {'repo-a': '~/code/repo-a'}}, (msg) =>
+        logs.push(msg),
+      )
+
+      const saved = await fs.readJSON(testConfigPath)
+      expect(saved.workspaces.proj01.mode).to.equal('sandbox')
     })
 
     it('does not change defaultWorkspace when adding a second workspace', async () => {
       await fs.writeJSON(testConfigPath, {defaultWorkspace: 'proj01', workspaces: {proj01: {}}})
 
       const logs: string[] = []
-      await addWorkspace(testConfigDir, 'proj02', {'repo-b': '~/code/repo-b'}, (msg) => logs.push(msg))
+      await addWorkspace(testConfigDir, 'proj02', {repos: {'repo-b': '~/code/repo-b'}}, (msg) => logs.push(msg))
 
       const saved = await fs.readJSON(testConfigPath)
       expect(saved.defaultWorkspace).to.equal('proj01')
@@ -105,7 +116,7 @@ describe('workspaceConfig', () => {
       await fs.writeJSON(testConfigPath, {workspaces: {proj01: {}}})
 
       const logs: string[] = []
-      const result = await addWorkspace(testConfigDir, 'proj01', {}, (msg) => logs.push(msg))
+      const result = await addWorkspace(testConfigDir, 'proj01', {repos: {}}, (msg) => logs.push(msg))
 
       expect(result).to.be.false
       expect(logs[0]).to.include("Workspace 'proj01' already exists")
@@ -125,23 +136,38 @@ describe('workspaceConfig', () => {
     })
 
     it('updates repos for existing workspace', async () => {
-      await fs.writeJSON(testConfigPath, {workspaces: {proj01: {'repo-a': '/old'}}})
+      await fs.writeJSON(testConfigPath, {workspaces: {proj01: {mode: 'local', repos: {'repo-a': '/old'}}}})
 
       const logs: string[] = []
-      const result = await updateWorkspace(testConfigDir, 'proj01', {'repo-a': '/new', 'repo-b': '/also'}, (msg) =>
-        logs.push(msg),
+      const result = await updateWorkspace(
+        testConfigDir,
+        'proj01',
+        {repos: {'repo-a': '/new', 'repo-b': '/also'}},
+        (msg) => logs.push(msg),
       )
 
       expect(result).to.be.true
       const saved = await fs.readJSON(testConfigPath)
-      expect(saved.workspaces.proj01).to.deep.equal({'repo-a': '/new', 'repo-b': '/also'})
+      expect(saved.workspaces.proj01).to.deep.equal({mode: 'local', repos: {'repo-a': '/new', 'repo-b': '/also'}})
+    })
+
+    it('preserves the existing mode when mode is omitted and changes it when provided', async () => {
+      await fs.writeJSON(testConfigPath, {workspaces: {proj01: {mode: 'sandbox', repos: {'repo-a': '/old'}}}})
+
+      await updateWorkspace(testConfigDir, 'proj01', {repos: {'repo-a': '/new'}}, () => {})
+      let saved = await fs.readJSON(testConfigPath)
+      expect(saved.workspaces.proj01.mode).to.equal('sandbox')
+
+      await updateWorkspace(testConfigDir, 'proj01', {mode: 'local', repos: {'repo-a': '/new'}}, () => {})
+      saved = await fs.readJSON(testConfigPath)
+      expect(saved.workspaces.proj01.mode).to.equal('local')
     })
 
     it('returns false and logs when workspace does not exist', async () => {
       await fs.writeJSON(testConfigPath, {workspaces: {}})
 
       const logs: string[] = []
-      const result = await updateWorkspace(testConfigDir, 'missing', {}, (msg) => logs.push(msg))
+      const result = await updateWorkspace(testConfigDir, 'missing', {repos: {}}, (msg) => logs.push(msg))
 
       expect(result).to.be.false
       expect(logs[0]).to.include("Workspace 'missing' not found")
