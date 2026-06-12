@@ -15,6 +15,7 @@ sdkck plugins install @hesed/claude
 * [claude](#claude)
 * [Install](#install)
 * [Usage](#usage)
+* [Running skills and slash commands directly](#running-skills-and-slash-commands-directly)
 * [Commands](#commands)
 <!-- tocstop -->
 
@@ -26,7 +27,7 @@ $ npm install -g @hesed/claude
 $ claude COMMAND
 running command...
 $ claude (--version)
-@hesed/claude/0.1.0 darwin-arm64 node-v22.14.0
+@hesed/claude/0.1.0 linux-x64 node-v22.22.3
 $ claude --help [COMMAND]
 USAGE
   $ claude COMMAND
@@ -112,16 +113,15 @@ Add Claude Agent SDK authentication
 
 ```
 USAGE
-  $ claude claude auth add -p <value> -k <value> [--json] [-u <value>] [--opus <value>] [--sonnet <value>] [--haiku
-    <value>]
+  $ claude claude auth add -p <value> -k <value> -u <value> --opus <value> --sonnet <value> --haiku <value> [--json]
 
 FLAGS
   -k, --apiKey=<value>   (required) Anthropic API key
   -p, --profile=<value>  (required) Profile name
-  -u, --apiUrl=<value>   Anthropic API base URL (blank for default)
-      --haiku=<value>    Haiku model ID override
-      --opus=<value>     Opus model ID override
-      --sonnet=<value>   Sonnet model ID override
+  -u, --apiUrl=<value>   (required) Anthropic API base URL (blank for default)
+      --haiku=<value>    (required) Haiku model ID override
+      --opus=<value>     (required) Opus model ID override
+      --sonnet=<value>   (required) Sonnet model ID override
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -238,16 +238,15 @@ Update Claude Agent SDK authentication
 
 ```
 USAGE
-  $ claude claude auth update -p <value> -k <value> [--json] [-u <value>] [--opus <value>] [--sonnet <value>] [--haiku
-    <value>]
+  $ claude claude auth update -p <value> -k <value> -u <value> --opus <value> --sonnet <value> --haiku <value> [--json]
 
 FLAGS
   -k, --apiKey=<value>   (required) Anthropic API key
   -p, --profile=<value>  (required) Profile name
-  -u, --apiUrl=<value>   Anthropic API base URL (blank for default)
-      --haiku=<value>    Haiku model ID override
-      --opus=<value>     Opus model ID override
-      --sonnet=<value>   Sonnet model ID override
+  -u, --apiUrl=<value>   (required) Anthropic API base URL (blank for default)
+      --haiku=<value>    (required) Haiku model ID override
+      --opus=<value>     (required) Opus model ID override
+      --sonnet=<value>   (required) Sonnet model ID override
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -452,12 +451,11 @@ Add a workspace with named repository directories
 
 ```
 USAGE
-  $ claude claude workspace add --repo <value>... -w <value> [--json] [--mode local|sandbox]
+  $ claude claude workspace add --mode local|sandbox --repo <value>... -w <value> [--json]
 
 FLAGS
   -w, --workspace=<value>  (required) Workspace name
-      --mode=<option>      [default: local] Workspace mode: 'local' exposes repo directories on the real filesystem,
-                           'sandbox' mounts them (cloning git URLs) into a virtual bash where agent shell commands run
+      --mode=<option>      (required) 'local' uses real repo dirs; 'sandbox' clones git URLs into a virtual bash
                            <options: local|sandbox>
       --repo=<value>...    (required) Named repo entry as name=path or name=git-url (repeatable)
 
@@ -506,11 +504,10 @@ Delete a workspace or remove a repo from a workspace
 
 ```
 USAGE
-  $ claude claude workspace delete [--json] [--repo <value>] [-w <value>]
+  $ claude claude workspace delete -w <value> [--json]
 
 FLAGS
-  -w, --workspace=<value>  Workspace name
-      --repo=<value>       Repo name to remove from the workspace
+  -w, --workspace=<value>  (required) Workspace name
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -520,10 +517,6 @@ DESCRIPTION
 
 EXAMPLES
   $ claude claude workspace delete --workspace proj01
-
-  $ claude claude workspace delete --workspace proj01 --repo repo01
-
-  $ claude claude workspace delete --repo repo01
 ```
 
 _See code: [src/commands/claude/workspace/delete.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/workspace/delete.ts)_
@@ -558,13 +551,11 @@ USAGE
   <value>]
 
 FLAGS
-  -w, --workspace=<value>       Workspace name (default: default workspace)
-      --mode=<option>           Workspace mode: 'local' exposes repo directories on the real filesystem, 'sandbox'
-                                mounts them (cloning git URLs) into a virtual bash where agent shell commands run
-                                (default: keep current mode)
+  -w, --workspace=<value>       Workspace name
+      --mode=<option>           'local' uses real repo dirs; 'sandbox' clones git URLs into a virtual bash
                                 <options: local|sandbox>
       --remove-repo=<value>...  Repo name to remove from the workspace (repeatable)
-      --repo=<value>...         Named repo entry as name=path to add/update (repeatable, merges into existing)
+      --repo=<value>...         Named repo entry as name=path to add/update (repeatable)
 
 GLOBAL FLAGS
   --json  Format output as json.
