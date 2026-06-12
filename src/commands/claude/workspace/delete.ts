@@ -9,7 +9,6 @@ export default class AgentWorkspaceDelete extends Command {
   static override enableJsonFlag = true
   static override examples = ['<%= config.bin %> <%= command.id %> --workspace proj01']
   static override flags = {
-    repo: Flags.string({description: 'Repo name to remove from the workspace', required: !process.stdout.isTTY}),
     workspace: Flags.string({char: 'w', description: 'Workspace name', required: !process.stdout.isTTY}),
   }
 

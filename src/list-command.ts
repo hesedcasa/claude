@@ -5,7 +5,7 @@ import {clearClients, list} from './agent/agent-client.js'
 import {loadAgentConfig} from './agent/profile-config.js'
 import {writeCapabilityStore} from './capability-commands.js'
 import {isGitUrl} from './workspace-bash.js'
-import {commonParentDir, expandPath, readWorkspace} from './workspace-config.js'
+import {commonParentDir, expandPath, getDefaultWorkspace, readWorkspace} from './workspace-config.js'
 
 export type ListCategory = 'agents' | 'commands' | 'mcpServers' | 'skills' | 'tools'
 
@@ -29,7 +29,8 @@ export abstract class ListCommand extends Command {
     let cwd = process.cwd()
     let additionalDirectories: string[] | undefined
 
-    const workspace = await readWorkspace(this.config.configDir, flags.workspace)
+    const workspaceName = flags.workspace ?? (await getDefaultWorkspace(this.config.configDir))
+    const workspace = await readWorkspace(this.config.configDir, workspaceName)
     const localDirs = workspace
       ? Object.values(workspace.repos)
           .filter((dir) => !isGitUrl(dir))

@@ -36,29 +36,34 @@ export default class AgentAsk extends Command {
     }),
   }
 
+  // eslint-disable-next-line complexity
   public async run(): Promise<void> {
     const {args, flags} = await this.parse(AgentAsk)
     const config = await loadAgentConfig(this.config, this.log.bind(this), flags.profile)
     if (!config) return
 
     let workspaceContext: undefined | WorkspaceContext
-    const workspace = await readWorkspace(this.config.configDir, flags.workspace)
-    if (workspace && Object.keys(workspace.repos).length > 0) {
+    const workspaceName = flags.workspace
+
+    if (workspaceName) {
+      const workspace = await readWorkspace(this.config.configDir, workspaceName)
+
+      if (!workspace || Object.keys(workspace.repos).length === 0) {
+        this.error(`Workspace '${workspaceName}' does not exist.`)
+      }
+
       workspaceContext = await buildWorkspaceContext({
         cacheDir: path.join(this.config.dataDir, 'workspace-repos'),
         log: this.log.bind(this),
         mode: workspace.mode,
         repoFilter: flags.repo,
         repos: workspace.repos,
-        workspaceLabel: flags.workspace ?? 'default',
+        workspaceLabel: workspaceName ?? 'pwd',
       })
     }
 
-    const systemPrompt = workspaceContext
-      ? flags.system
-        ? `${flags.system}\n\n${workspaceContext.systemPrompt}`
-        : workspaceContext.systemPrompt
-      : flags.system
+    const systemPrompt =
+      [flags.system, workspaceContext?.systemPrompt].filter(Boolean).join('\n\n') || undefined
 
     const allowedTools = flags['allow-tools']
       ? flags['allow-tools']
@@ -67,7 +72,9 @@ export default class AgentAsk extends Command {
           .filter(Boolean)
       : []
 
-    const model = flags.model ? (config.models?.[flags.model as 'haiku' | 'opus' | 'sonnet'] ?? flags.model) : undefined
+    const model = flags.model
+      ? (config.models?.[flags.model as 'haiku' | 'opus' | 'sonnet'] ?? flags.model)
+      : config.models?.sonnet
 
     const result = await ask(config, args.prompt, {
       additionalDirectories: workspaceContext?.additionalDirectories,
@@ -77,6 +84,7 @@ export default class AgentAsk extends Command {
       onText: flags.stream ? (text) => this.log(text) : undefined,
       onToolUse: flags.stream ? (name) => this.log(`[tool: ${name}]`) : undefined,
       sandboxExec: workspaceContext?.sandboxExec,
+      sandboxFs: workspaceContext?.sandboxFs,
       systemPrompt,
     })
     clearClients()

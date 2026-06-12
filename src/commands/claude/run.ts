@@ -44,15 +44,22 @@ export default class AgentRun extends Command {
     if (!config) return
 
     let workspaceContext: undefined | WorkspaceContext
-    const workspace = await readWorkspace(this.config.configDir, flags.workspace)
-    if (workspace && Object.keys(workspace.repos).length > 0) {
+    const workspaceName = flags.workspace
+
+    if (workspaceName) {
+      const workspace = await readWorkspace(this.config.configDir, workspaceName)
+
+      if (!workspace || Object.keys(workspace.repos).length === 0) {
+        this.error(`Workspace '${workspaceName}' does not exist.`)
+      }
+
       workspaceContext = await buildWorkspaceContext({
         cacheDir: path.join(this.config.dataDir, 'workspace-repos'),
         log: this.log.bind(this),
         mode: workspace.mode,
         repoFilter: flags.repo,
         repos: workspace.repos,
-        workspaceLabel: flags.workspace ?? 'default',
+        workspaceLabel: workspaceName ?? 'pwd',
       })
     }
 
@@ -76,6 +83,7 @@ export default class AgentRun extends Command {
       onText: flags.stream ? (text) => this.log(text) : undefined,
       onToolUse: flags.stream ? (name) => this.log(`[tool: ${name}]`) : undefined,
       sandboxExec: workspaceContext?.sandboxExec,
+      sandboxFs: workspaceContext?.sandboxFs,
       systemPrompt,
     })
     clearClients()

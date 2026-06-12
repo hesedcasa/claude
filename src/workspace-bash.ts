@@ -14,6 +14,22 @@ export interface BashExecResult {
   stdout: string
 }
 
+export interface SandboxFsStat {
+  isDirectory: boolean
+  isFile: boolean
+  size: number
+}
+
+export interface SandboxFs {
+  exists: (path: string) => Promise<boolean>
+  mkdir: (path: string, opts?: {recursive?: boolean}) => Promise<void>
+  readdir: (path: string) => Promise<string[]>
+  readFile: (path: string) => Promise<string>
+  rm: (path: string, opts?: {force?: boolean; recursive?: boolean}) => Promise<void>
+  stat: (path: string) => Promise<SandboxFsStat>
+  writeFile: (path: string, content: string) => Promise<void>
+}
+
 export type BashExecFn = (command: string) => Promise<BashExecResult>
 export type GitSyncFn = (url: string, dest: string, log: (message: string) => void) => Promise<string | undefined>
 
@@ -23,6 +39,7 @@ export interface WorkspaceContext {
   additionalDirectories?: string[]
   cwd?: string
   sandboxExec?: BashExecFn
+  sandboxFs?: SandboxFs
   systemPrompt: string
 }
 
@@ -145,15 +162,47 @@ async function buildSandboxContext(
 
   if (mounts.length === 0) return undefined
 
+  await fs.ensureDir(cacheDir)
   const bash = new Bash({cwd: '/workspace', fs: new MountableFs({base: new InMemoryFs(), mounts})})
+  const fsInstance = bash.fs
+  const cwd = bash.getCwd()
+  const resolve = (p: string): string => (p.startsWith('/') ? p : fsInstance.resolvePath(cwd, p))
+
+  const sandboxFs: SandboxFs = {
+    exists: (p) => fsInstance.exists(resolve(p)),
+    mkdir: (p, o) => fsInstance.mkdir(resolve(p), o),
+    readdir: (p) => fsInstance.readdir(resolve(p)),
+    readFile: (p) => fsInstance.readFile(resolve(p)),
+    rm: (p, o) => fsInstance.rm(resolve(p), o),
+    async stat(p) {
+      const s = await fsInstance.stat(resolve(p))
+      return {isDirectory: s.isDirectory, isFile: s.isFile, size: s.size}
+    },
+    async writeFile(p, content) {
+      const resolved = resolve(p)
+      const dir = resolved.replace(/\/[^/]*$/, '')
+      if (dir && dir !== resolved) {
+        try {
+          await fsInstance.mkdir(dir, {recursive: true})
+        } catch {
+          /* parent already exists */
+        }
+      }
+
+      await fsInstance.writeFile(resolved, content)
+    },
+  }
+
   return {
+    cwd: cacheDir,
     async sandboxExec(command: string): Promise<BashExecResult> {
       const result = await bash.exec(command)
       return {exitCode: result.exitCode, stderr: result.stderr, stdout: result.stdout}
     },
+    sandboxFs,
     systemPrompt:
       `Workspace repos are mounted in a sandboxed virtual filesystem:\n${promptLines.join('\n')}\n\n` +
-      'Use the workspace bash tool for all shell, file inspection, and file editing operations. ' +
+      'Use the workspace tools for all shell, file read, file write, and file edit operations. ' +
       'Changes stay inside the sandbox and never touch the real filesystem.',
   }
 }

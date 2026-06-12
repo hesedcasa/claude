@@ -176,7 +176,7 @@ describe('agent:run', () => {
 
     await cmd.run()
 
-    expect(readWorkspaceStub.firstCall.args[2]).to.equal('proj01')
+    expect(readWorkspaceStub.firstCall.args[1]).to.equal('proj01')
     const wsArgs = buildWorkspaceContextStub.firstCall.args[0]
     expect(wsArgs.mode).to.equal('sandbox')
     expect(wsArgs.workspaceLabel).to.equal('proj01')

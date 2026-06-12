@@ -12,14 +12,14 @@ describe('agent:workspace:add', () => {
 
     const imported = await esmock('../../../../src/commands/claude/workspace/add.js', {
       '../../../../src/workspace-config.js': {addWorkspace: addWorkspaceStub},
-      '@inquirer/prompts': {input: stub().resolves('')},
+      '@inquirer/prompts': {input: stub().resolves(''), select: stub().resolves('sandbox')},
     })
     AgentWorkspaceAdd = imported.default
   })
 
   it('passes parsed repo entries to addWorkspace', async () => {
     const cmd = new AgentWorkspaceAdd(
-      ['--workspace', 'proj01', '--repo', 'repo-a=/code/repo-a', '--repo', 'repo-b=/code/repo-b'],
+      ['--workspace', 'proj01', '--mode', 'local', '--repo', 'repo-a=/code/repo-a', '--repo', 'repo-b=/code/repo-b'],
       {
         configDir: '/tmp/test-config',
         root: process.cwd(),
@@ -44,7 +44,7 @@ describe('agent:workspace:add', () => {
   })
 
   it('errors when a repo entry is malformed', async () => {
-    const cmd = new AgentWorkspaceAdd(['--workspace', 'proj01', '--repo', 'repo-a'], {
+    const cmd = new AgentWorkspaceAdd(['--workspace', 'proj01', '--mode', 'local', '--repo', 'repo-a'], {
       configDir: '/tmp/test-config',
       root: process.cwd(),
       runHook: stub().resolves({failures: [], successes: []}),
@@ -65,7 +65,7 @@ describe('agent:workspace:add', () => {
   })
 
   it('requires at least one repo entry', async () => {
-    const cmd = new AgentWorkspaceAdd(['--workspace', 'proj01'], {
+    const cmd = new AgentWorkspaceAdd(['--workspace', 'proj01', '--mode', 'local'], {
       configDir: '/tmp/test-config',
       root: process.cwd(),
       runHook: stub().resolves({failures: [], successes: []}),

@@ -1,8 +1,9 @@
-import {input, select} from '@inquirer/prompts'
+import {input} from '@inquirer/prompts'
 import {Command, Flags} from '@oclif/core'
 
 import {
   deleteRepoFromWorkspace,
+  getDefaultWorkspace,
   readWorkspace,
   updateWorkspace,
   type WorkspaceMode,
@@ -22,32 +23,33 @@ export default class AgentWorkspaceUpdate extends Command {
     mode: Flags.string({
       description: "'local' uses real repo dirs; 'sandbox' clones git URLs into a virtual bash",
       options: ['local', 'sandbox'],
-      required: !process.stdout.isTTY,
     }),
     'remove-repo': Flags.string({
       description: 'Repo name to remove from the workspace (repeatable)',
       multiple: true,
-      required: !process.stdout.isTTY,
     }),
     repo: Flags.string({
       description: 'Named repo entry as name=path to add/update (repeatable)',
       multiple: true,
-      required: !process.stdout.isTTY,
     }),
-    workspace: Flags.string({char: 'w', description: 'Workspace name', required: !process.stdout.isTTY}),
+    workspace: Flags.string({char: 'w', description: 'Workspace name'}),
   }
 
   public async run(): Promise<void> {
     const {flags} = await this.parse(AgentWorkspaceUpdate)
-    const workspace = flags.workspace ?? (await input({default: 'default', message: 'Workspace name:', required: true}))
+    const workspace =
+      flags.workspace ??
+      (await getDefaultWorkspace(this.config.configDir)) ??
+      (process.stdout.isTTY
+        ? await input({default: 'default', message: 'Workspace name:', required: true})
+        : this.error('Provide --workspace or set a default workspace first.'))
     const current = await readWorkspace(this.config.configDir, workspace)
 
     if (!current) {
       this.error(`No workspaces found. Run '${this.config.bin} workspace add' to create one.`)
     }
 
-    const mode =
-      flags.mode ?? (await select({choices: ['local', 'sandbox'], default: 'sandbox', message: 'Workspace mode:'}))
+    const mode = flags.mode ?? current.mode
 
     if (flags['remove-repo'] && flags['remove-repo'].length > 0) {
       for (const repoName of flags['remove-repo']) {

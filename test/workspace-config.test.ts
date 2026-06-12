@@ -21,50 +21,40 @@ describe('workspace-config', () => {
       const repos = {'repo-a': '~/code/repo-a'}
       await fs.writeJSON(testConfigPath, {workspaces: {proj01: {mode: 'sandbox', repos}}})
 
-      const logs: string[] = []
-      const result = await readWorkspace(testConfigDir, (msg) => logs.push(msg), 'proj01')
+      const result = await readWorkspace(testConfigDir, 'proj01')
 
       expect(result).to.deep.equal({mode: 'sandbox', repos})
-      expect(logs).to.be.empty
     })
 
     it('ignores defaultWorkspace and returns undefined when workspaceName is omitted', async () => {
       const repos = {'repo-b': '~/code/repo-b'}
       await fs.writeJSON(testConfigPath, {defaultWorkspace: 'proj01', workspaces: {proj01: {mode: 'local', repos}}})
 
-      const logs: string[] = []
-      const result = await readWorkspace(testConfigDir, (msg) => logs.push(msg))
+      const result = await readWorkspace(testConfigDir)
 
       expect(result).to.be.undefined
-      expect(logs).to.be.empty
     })
 
-    it('returns undefined and logs when workspace not found', async () => {
+    it('returns undefined when workspace not found', async () => {
       await fs.writeJSON(testConfigPath, {workspaces: {}})
 
-      const logs: string[] = []
-      const result = await readWorkspace(testConfigDir, (msg) => logs.push(msg), 'missing')
+      const result = await readWorkspace(testConfigDir, 'missing')
 
       expect(result).to.be.undefined
-      expect(logs[0]).to.include("Workspace 'missing' not found")
     })
 
     it('returns undefined silently when no workspaceName and no default', async () => {
       await fs.writeJSON(testConfigPath, {workspaces: {}})
 
-      const logs: string[] = []
-      const result = await readWorkspace(testConfigDir, (msg) => logs.push(msg))
+      const result = await readWorkspace(testConfigDir)
 
       expect(result).to.be.undefined
-      expect(logs).to.be.empty
     })
 
-    it('returns undefined and logs when file does not exist', async () => {
-      const logs: string[] = []
-      const result = await readWorkspace(testConfigDir, (msg) => logs.push(msg), 'proj01')
+    it('returns undefined when file does not exist', async () => {
+      const result = await readWorkspace(testConfigDir, 'proj01')
 
       expect(result).to.be.undefined
-      expect(logs[0]).to.include('No workspaces found')
     })
   })
 
@@ -170,7 +160,7 @@ describe('workspace-config', () => {
       const result = await updateWorkspace(testConfigDir, 'missing', {repos: {}}, (msg) => logs.push(msg))
 
       expect(result).to.be.false
-      expect(logs[0]).to.include("Workspace 'missing' not found")
+      expect(logs[0]).to.include("Workspace 'missing' does not exist")
     })
   })
 
@@ -222,7 +212,7 @@ describe('workspace-config', () => {
       const result = await deleteWorkspace(testConfigDir, 'missing', (msg) => logs.push(msg))
 
       expect(result).to.be.false
-      expect(logs[0]).to.include("Workspace 'missing' not found")
+      expect(logs[0]).to.include("Workspace 'missing' does not exist")
     })
 
     it('returns false and logs when config file is missing', async () => {

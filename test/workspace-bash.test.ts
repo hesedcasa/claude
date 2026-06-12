@@ -95,7 +95,9 @@ describe('workspace-bash', () => {
 
       expect(ctx).to.not.be.undefined
       expect(ctx!.additionalDirectories).to.be.undefined
+      expect(ctx!.cwd).to.equal(path.join(tmpDir, 'cache'))
       expect(ctx!.sandboxExec).to.be.a('function')
+      expect(ctx!.sandboxFs).to.be.an('object')
       expect(ctx!.systemPrompt).to.include('/workspace/repo-a')
 
       const ls = await ctx!.sandboxExec!('ls /workspace')
@@ -115,6 +117,49 @@ describe('workspace-bash', () => {
 
       const real = await fs.readFile(path.join(repoA, 'file.txt'), 'utf8')
       expect(real).to.equal('hello-a\n')
+    })
+
+    it('exposes sandbox filesystem operations that share state with bash', async () => {
+      const repoA = path.join(tmpDir, 'repo-a')
+      const ctx = await buildWorkspaceContext(base({'repo-a': repoA}, 'sandbox'))
+
+      const {sandboxFs} = ctx!
+
+      // read existing file via fs
+      expect(await sandboxFs!.readFile('/workspace/repo-a/file.txt')).to.equal('hello-a\n')
+
+      // write via fs, confirm visible in bash
+      await sandboxFs!.writeFile('/workspace/repo-a/file.txt', 'from-fs\n')
+      const bash = await ctx!.sandboxExec!('cat /workspace/repo-a/file.txt')
+      expect(bash.stdout).to.equal('from-fs\n')
+
+      // write via bash, confirm visible in fs
+      await ctx!.sandboxExec!('echo from-bash > /workspace/repo-a/new.txt')
+      expect(await sandboxFs!.readFile('/workspace/repo-a/new.txt')).to.equal('from-bash\n')
+
+      // real file is untouched
+      expect(await fs.readFile(path.join(repoA, 'file.txt'), 'utf8')).to.equal('hello-a\n')
+    })
+
+    it('sandboxFs stat and readdir reflect the virtual filesystem', async () => {
+      const ctx = await buildWorkspaceContext(
+        base({'repo-a': path.join(tmpDir, 'repo-a')}, 'sandbox'),
+      )
+      const {sandboxFs} = ctx!
+
+      const stat = await sandboxFs!.stat('/workspace/repo-a')
+      expect(stat.isDirectory).to.be.true
+
+      const entries = await sandboxFs!.readdir('/workspace/repo-a')
+      expect(entries).to.include('file.txt')
+    })
+
+    it('sandboxFs writeFile auto-creates parent directories', async () => {
+      const ctx = await buildWorkspaceContext(
+        base({'repo-a': path.join(tmpDir, 'repo-a')}, 'sandbox'),
+      )
+      await ctx!.sandboxFs!.writeFile('/workspace/repo-a/new-dir/nested.txt', 'hello\n')
+      expect(await ctx!.sandboxFs!.readFile('/workspace/repo-a/new-dir/nested.txt')).to.equal('hello\n')
     })
 
     it('clones git URLs through gitSync into the cache dir in sandbox mode', async () => {

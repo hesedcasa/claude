@@ -156,7 +156,7 @@ describe('agent:list', () => {
 
     await cmd.run()
 
-    expect(readWorkspaceStub.firstCall.args[2]).to.equal('proj01')
+    expect(readWorkspaceStub.firstCall.args[1]).to.equal('proj01')
     const opts = listStub.firstCall.args[1]
     expect(opts.cwd).to.equal('~/code/repo-a')
     expect(opts.additionalDirectories).to.deep.equal(['~/code/repo-a', '~/code/repo-b'])
