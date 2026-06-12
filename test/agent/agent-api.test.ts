@@ -105,6 +105,17 @@ describe('AgentApi', () => {
       expect(callArgs.options.allowedTools).to.deep.equal(['WebFetch', 'mcp__workspace-bash__bash'])
     })
 
+    it('adds the sandbox bash tool to an empty allowedTools list', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+      const sandboxExec = stub().resolves({exitCode: 0, stderr: '', stdout: 'out'})
+
+      await api.ask('hi', {allowedTools: [], sandboxExec})
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.allowedTools).to.deep.equal(['mcp__workspace-bash__bash'])
+    })
+
     it('does not configure sandbox tooling without sandboxExec', async () => {
       const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
       const api = new AgentApi(config, queryFn)

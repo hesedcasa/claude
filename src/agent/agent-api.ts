@@ -70,16 +70,16 @@ interface SandboxTooling {
 /**
  * Resolve the tool-related query options for a run. With a sandbox, the
  * built-in fs/shell tools are blocked, the sandbox bash tool is exposed,
- * and a non-empty allow-list is extended to include it.
+ * and any explicit allow-list is extended to include it.
  */
 function resolveToolOptions(options?: AskOptions): SandboxTooling {
   if (!options?.sandboxExec) return {allowedTools: options?.allowedTools}
 
   const sandbox = buildSandboxTooling(options.sandboxExec)
   const allowedTools =
-    options.allowedTools && options.allowedTools.length > 0
-      ? [...options.allowedTools, SANDBOX_BASH_TOOL]
-      : options.allowedTools
+    options.allowedTools === undefined
+      ? undefined
+      : [...options.allowedTools, SANDBOX_BASH_TOOL]
 
   return {...sandbox, allowedTools}
 }
