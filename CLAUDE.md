@@ -45,7 +45,6 @@ src/
 │   ├── profile-config.ts  # Profile resolution (loadAgentConfig)
 │   └── usage.ts           # formatUsageSummary helper
 ├── hooks/
-│   ├── command-not-found.ts  # command_not_found hook: dispatches unknown `claude <name>` to `claude run`
 │   └── init/register-capability-commands.ts  # init hook: registers cached skills/commands as first-class commands
 ├── capability-commands.ts # Capabilities cache (capabilities.json) + dynamic oclif command factory/registration
 ├── list-command.ts        # ListCommand base class shared by the list/* commands (category filter + cache refresh)
@@ -74,10 +73,9 @@ interface ApiResult {
 ```
 
 **3. Skills/slash commands as CLI commands (capability-commands.ts + hooks/):**
-Two complementary mechanisms expose skills and slash commands directly as `claude <name> [input]`:
+The `init` hook exposes skills and slash commands directly as `claude <name> [input]`:
 
 - **`init` hook (hooks/init/register-capability-commands.ts):** at startup, reads the capabilities cache (`<cacheDir>/capabilities.json`, written by `claude list` via `ListCommand.refreshCapabilityCache`) and injects one dynamic oclif command per skill/slash command into the Config's internal `_commands` map (`registerCapabilityCommands`). Registered names appear in `claude help` with the same flags as `claude run`; each dynamic command forwards its raw argv to `claude run <name>` (slash commands get a `/` prefix). Existing command ids and topics are never replaced, so built-ins always win. Run `claude list` to (re)populate the cache.
-- **`command_not_found` hook (hooks/command-not-found.ts):** fallback for names not yet cached. Rewrites the failed id to `claude run <name> [input]`, forwarding all remaining flags. Because oclif's space topic separator collates leading positionals into the failed command id (`claude:review:fix this`), the hook splits the id, takes segment 1 as the name, and re-joins the rest with `:` as the input. It throws the standard not-found error for ids outside the `claude` topic or typos inside existing sub-topics (`auth`, `list`, `workspace`).
 
 **4. AgentApi drives the SDK generator:**
 `AgentApi.ask()` iterates the `query()` async generator, collects `assistant` messages (text blocks and tool-use blocks) and the final `result` message. `AgentApi.list()` aborts after the `system/init` message to cheaply enumerate available capabilities. `AgentApi.run()` dispatches to `ask()` with either a slash-command prompt or a skills-scoped prompt.
