@@ -22,7 +22,7 @@ export default class AgentWorkspaceList extends Command {
 
   public async run(): Promise<ListResult> {
     await this.parse(AgentWorkspaceList)
-    const workspaces: undefined | Workspaces = await readWorkspaces(this.config.configDir, this.log.bind(this))
+    const workspaces: undefined | Workspaces = await readWorkspaces(this.config.configDir)
 
     if (!workspaces || Object.keys(workspaces).length === 0) {
       this.log("No workspaces found. Run 'claude workspace add' to create one.")

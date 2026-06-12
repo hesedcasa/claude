@@ -42,7 +42,7 @@ export default class AgentAsk extends Command {
     if (!config) return
 
     let workspaceContext: undefined | WorkspaceContext
-    const workspace = await readWorkspace(this.config.configDir, this.log.bind(this), flags.workspace)
+    const workspace = await readWorkspace(this.config.configDir, flags.workspace)
     if (workspace && Object.keys(workspace.repos).length > 0) {
       workspaceContext = await buildWorkspaceContext({
         cacheDir: path.join(this.config.dataDir, 'workspace-repos'),

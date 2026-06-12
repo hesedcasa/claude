@@ -68,7 +68,7 @@ export async function setDefaultWorkspace(
 
   const workspaces = (raw.workspaces ?? {}) as Workspaces
   if (!(workspace in workspaces)) {
-    log(`Workspace '${workspace}' not found`)
+    log(`Workspace '${workspace}' does not exist.`)
     return
   }
 
@@ -77,52 +77,30 @@ export async function setDefaultWorkspace(
   log(`Default workspace set to '${workspace}'`)
 }
 
-export async function readWorkspaces(
-  configDir: string,
-  log: (message: string) => void,
-): Promise<undefined | Workspaces> {
+export async function readWorkspaces(configDir: string): Promise<undefined | Workspaces> {
   const cp = configPath(configDir)
   try {
     const raw = await fs.readJSON(cp)
     return (raw.workspaces ?? {}) as Workspaces
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error)
-    if (msg.toLowerCase().includes('no such file or directory')) {
-      log('No workspaces found')
-    } else {
-      log(msg)
-    }
-
+  } catch {
     return undefined
   }
 }
 
-export async function readWorkspace(
-  configDir: string,
-  log: (message: string) => void,
-  workspaceName?: string,
-): Promise<undefined | WorkspaceEntry> {
+export async function readWorkspace(configDir: string, workspaceName?: string): Promise<undefined | WorkspaceEntry> {
   if (!workspaceName) return undefined
 
   const cp = configPath(configDir)
   let file: WorkspaceConfigFile
   try {
     file = await fs.readJSON(cp)
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error)
-    if (msg.toLowerCase().includes('no such file or directory')) {
-      log('No workspaces found')
-    } else {
-      log(msg)
-    }
-
+  } catch {
     return undefined
   }
 
   const workspaces = file.workspaces ?? {}
   const entry = workspaces[workspaceName]
   if (!entry) {
-    log(`Workspace '${workspaceName}' not found. Run 'claude workspace add' to create.`)
     return undefined
   }
 
@@ -180,7 +158,7 @@ export async function updateWorkspace(
 
   const workspaces = (existing.workspaces ?? {}) as Workspaces
   if (!(workspace in workspaces)) {
-    log(`Workspace '${workspace}' not found. Run 'claude workspace add' to create.`)
+    log(`Workspace '${workspace}' does not exist. Run 'claude workspace add' to create.`)
     return false
   }
 
@@ -213,7 +191,7 @@ export async function deleteWorkspace(
 
   const workspaces = (raw.workspaces ?? {}) as Workspaces
   if (!(workspace in workspaces)) {
-    log(`Workspace '${workspace}' not found`)
+    log(`Workspace '${workspace}' does not exist.`)
     return false
   }
 
@@ -252,7 +230,7 @@ export async function deleteRepoFromWorkspace(
 
   const workspaces = (raw.workspaces ?? {}) as Workspaces
   if (!(workspace in workspaces)) {
-    log(`Workspace '${workspace}' not found`)
+    log(`Workspace '${workspace}' does not exist.`)
     return false
   }
 

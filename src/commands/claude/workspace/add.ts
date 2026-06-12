@@ -1,7 +1,7 @@
-import {input} from '@inquirer/prompts'
+import {input, select} from '@inquirer/prompts'
 import {Command, Flags} from '@oclif/core'
 
-import {addWorkspace, type WorkspaceMode, type WorkspaceRepos} from '../../../workspace-config.js'
+import {addWorkspace, readWorkspace, type WorkspaceMode, type WorkspaceRepos} from '../../../workspace-config.js'
 
 export default class AgentWorkspaceAdd extends Command {
   static override args = {}
@@ -13,11 +13,9 @@ export default class AgentWorkspaceAdd extends Command {
   ]
   static override flags = {
     mode: Flags.string({
-      default: 'local',
-      description:
-        "Workspace mode: 'local' exposes repo directories on the real filesystem, 'sandbox' mounts them (cloning git URLs) into a virtual bash where agent shell commands run",
+      description: "'local' uses real repo dirs; 'sandbox' clones git URLs into a virtual bash",
       options: ['local', 'sandbox'],
-      required: false,
+      required: !process.stdout.isTTY,
     }),
     repo: Flags.string({
       description: 'Named repo entry as name=path or name=git-url (repeatable)',
@@ -29,8 +27,15 @@ export default class AgentWorkspaceAdd extends Command {
 
   public async run(): Promise<void> {
     const {flags} = await this.parse(AgentWorkspaceAdd)
-    const workspaceName =
-      flags.workspace ?? (await input({default: 'default', message: 'Workspace name:', required: true}))
+    const workspace = flags.workspace ?? (await input({default: 'default', message: 'Workspace name:', required: true}))
+    const current = await readWorkspace(this.config.configDir, workspace)
+
+    if (current) {
+      this.error(`Workspace '${workspace}' already exists. Use '${this.config.bin} workspace update' to modify it.`)
+    }
+
+    const mode =
+      flags.mode ?? (await select({choices: ['local', 'sandbox'], default: 'sandbox', message: 'Workspace mode:'}))
 
     const repos: WorkspaceRepos = {}
 
@@ -59,11 +64,6 @@ export default class AgentWorkspaceAdd extends Command {
       this.error('At least one repository entry is required.')
     }
 
-    await addWorkspace(
-      this.config.configDir,
-      workspaceName,
-      {mode: flags.mode as WorkspaceMode, repos},
-      this.log.bind(this),
-    )
+    await addWorkspace(this.config.configDir, workspace, {mode: mode as WorkspaceMode, repos}, this.log.bind(this))
   }
 }

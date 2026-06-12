@@ -29,7 +29,7 @@ export abstract class ListCommand extends Command {
     let cwd = process.cwd()
     let additionalDirectories: string[] | undefined
 
-    const workspace = await readWorkspace(this.config.configDir, this.log.bind(this), flags.workspace)
+    const workspace = await readWorkspace(this.config.configDir, flags.workspace)
     const localDirs = workspace
       ? Object.values(workspace.repos)
           .filter((dir) => !isGitUrl(dir))

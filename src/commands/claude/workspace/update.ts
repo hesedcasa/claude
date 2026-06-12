@@ -1,9 +1,8 @@
-import {input} from '@inquirer/prompts'
+import {input, select} from '@inquirer/prompts'
 import {Command, Flags} from '@oclif/core'
 
 import {
   deleteRepoFromWorkspace,
-  getDefaultWorkspace,
   readWorkspace,
   updateWorkspace,
   type WorkspaceMode,
@@ -21,37 +20,39 @@ export default class AgentWorkspaceUpdate extends Command {
   ]
   static override flags = {
     mode: Flags.string({
-      description:
-        "Workspace mode: 'local' exposes repo directories on the real filesystem, 'sandbox' mounts them (cloning git URLs) into a virtual bash where agent shell commands run (default: keep current mode)",
+      description: "'local' uses real repo dirs; 'sandbox' clones git URLs into a virtual bash",
       options: ['local', 'sandbox'],
-      required: false,
+      required: !process.stdout.isTTY,
     }),
     'remove-repo': Flags.string({
       description: 'Repo name to remove from the workspace (repeatable)',
       multiple: true,
-      required: false,
+      required: !process.stdout.isTTY,
     }),
     repo: Flags.string({
-      description: 'Named repo entry as name=path to add/update (repeatable, merges into existing)',
+      description: 'Named repo entry as name=path to add/update (repeatable)',
       multiple: true,
-      required: false,
+      required: !process.stdout.isTTY,
     }),
-    workspace: Flags.string({char: 'w', description: 'Workspace name (default: default workspace)', required: false}),
+    workspace: Flags.string({char: 'w', description: 'Workspace name', required: !process.stdout.isTTY}),
   }
 
   public async run(): Promise<void> {
     const {flags} = await this.parse(AgentWorkspaceUpdate)
-    const workspaceName = flags.workspace
+    const workspace = flags.workspace ?? (await input({default: 'default', message: 'Workspace name:', required: true}))
+    const current = await readWorkspace(this.config.configDir, workspace)
 
-    const resolvedName = workspaceName ?? (await getDefaultWorkspace(this.config.configDir)) ?? 'default'
+    if (!current) {
+      this.error(`No workspaces found. Run '${this.config.bin} workspace add' to create one.`)
+    }
 
-    const current = await readWorkspace(this.config.configDir, this.log.bind(this), resolvedName)
-    if (!current) return
+    const mode =
+      flags.mode ?? (await select({choices: ['local', 'sandbox'], default: 'sandbox', message: 'Workspace mode:'}))
 
     if (flags['remove-repo'] && flags['remove-repo'].length > 0) {
       for (const repoName of flags['remove-repo']) {
         // eslint-disable-next-line no-await-in-loop
-        await deleteRepoFromWorkspace(this.config.configDir, resolvedName, repoName, this.log.bind(this))
+        await deleteRepoFromWorkspace(this.config.configDir, workspace, repoName, this.log.bind(this))
       }
 
       if (!flags.repo || flags.repo.length === 0) return
@@ -69,7 +70,7 @@ export default class AgentWorkspaceUpdate extends Command {
         repos[entry.slice(0, sep)] = entry.slice(sep + 1)
       }
     } else if (!flags.mode) {
-      this.log(`Current repos for workspace '${resolvedName}':`)
+      this.log(`Current repos for workspace '${workspace}':`)
       for (const [name, dir] of Object.entries(current.repos)) {
         this.log(`  ${name}: ${dir}`)
       }
@@ -86,11 +87,6 @@ export default class AgentWorkspaceUpdate extends Command {
       }
     }
 
-    await updateWorkspace(
-      this.config.configDir,
-      resolvedName,
-      {mode: flags.mode as undefined | WorkspaceMode, repos},
-      this.log.bind(this),
-    )
+    await updateWorkspace(this.config.configDir, workspace, {mode: mode as WorkspaceMode, repos}, this.log.bind(this))
   }
 }
