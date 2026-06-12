@@ -1,8 +1,11 @@
+import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags} from '@oclif/core'
+import {default as path} from 'node:path'
 
 import {ask, clearClients} from '../../agent/agent-client.js'
-import {commonParentDir, expandPath, readAgentConfig, readWorkspace} from '../../config.js'
-import {formatAsToon} from '../../format.js'
+import {loadAgentConfig} from '../../agent/profile-config.js'
+import {buildWorkspaceContext, type WorkspaceContext} from '../../workspace-bash.js'
+import {readWorkspace} from '../../workspace-config.js'
 
 export default class AgentAsk extends Command {
   static override args = {
@@ -26,32 +29,41 @@ export default class AgentAsk extends Command {
     stream: Flags.boolean({description: 'Stream assistant text as it arrives', required: false}),
     system: Flags.string({description: 'Custom system prompt for the agent', required: false}),
     toon: Flags.boolean({description: 'Format output as toon', required: false}),
-    workspace: Flags.string({char: 'w', description: 'Workspace name (uses default workspace if omitted)', required: false}),
+    workspace: Flags.string({
+      char: 'w',
+      description: 'Workspace name (uses current directory if omitted)',
+      required: false,
+    }),
   }
 
+  // eslint-disable-next-line complexity
   public async run(): Promise<void> {
     const {args, flags} = await this.parse(AgentAsk)
-    const config = await readAgentConfig(this.config.configDir, this.log.bind(this), flags.profile)
+    const config = await loadAgentConfig(this.config, this.log.bind(this), flags.profile)
     if (!config) return
 
-    let systemPrompt = flags.system
-    let cwd = process.cwd()
-    let additionalDirectories: string[] | undefined
+    let workspaceContext: undefined | WorkspaceContext
+    const workspaceName = flags.workspace
 
-    const repos = await readWorkspace(this.config.configDir, this.log.bind(this), flags.workspace)
-    if (repos && Object.keys(repos).length > 0) {
-      const entries = flags.repo ? Object.entries(repos).filter(([name]) => name === flags.repo) : Object.entries(repos)
-      if (flags.repo && entries.length === 0) {
-        this.log(`Repo '${flags.repo}' not found in workspace '${flags.workspace ?? 'default'}'`)
-      } else if (entries.length > 0) {
-        const dirLines = entries.map(([name, dir]) => `  ${name}: ${dir}`).join('\n')
-        const workspaceContext = `Workspace directories:\n${dirLines}`
-        systemPrompt = flags.system ? `${flags.system}\n\n${workspaceContext}` : workspaceContext
-        const expandedDirs = entries.map(([, dir]) => expandPath(dir))
-        cwd = commonParentDir(expandedDirs)
-        additionalDirectories = expandedDirs
+    if (workspaceName) {
+      const workspace = await readWorkspace(this.config.configDir, workspaceName)
+
+      if (!workspace || Object.keys(workspace.repos).length === 0) {
+        this.error(`Workspace '${workspaceName}' does not exist.`)
       }
+
+      workspaceContext = await buildWorkspaceContext({
+        cacheDir: path.join(this.config.dataDir, 'workspace-repos'),
+        log: this.log.bind(this),
+        mode: workspace.mode,
+        repoFilter: flags.repo,
+        repos: workspace.repos,
+        workspaceLabel: workspaceName ?? 'pwd',
+      })
     }
+
+    const systemPrompt =
+      [flags.system, workspaceContext?.systemPrompt].filter(Boolean).join('\n\n') || undefined
 
     const allowedTools = flags['allow-tools']
       ? flags['allow-tools']
@@ -62,15 +74,17 @@ export default class AgentAsk extends Command {
 
     const model = flags.model
       ? (config.models?.[flags.model as 'haiku' | 'opus' | 'sonnet'] ?? flags.model)
-      : undefined
+      : config.models?.sonnet
 
     const result = await ask(config, args.prompt, {
-      additionalDirectories,
+      additionalDirectories: workspaceContext?.additionalDirectories,
       allowedTools,
-      cwd,
+      cwd: workspaceContext?.cwd ?? process.cwd(),
       model,
       onText: flags.stream ? (text) => this.log(text) : undefined,
       onToolUse: flags.stream ? (name) => this.log(`[tool: ${name}]`) : undefined,
+      sandboxExec: workspaceContext?.sandboxExec,
+      sandboxFs: workspaceContext?.sandboxFs,
       systemPrompt,
     })
     clearClients()

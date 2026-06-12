@@ -35,27 +35,35 @@ npm run find-deadcode
 src/
 ├── commands/claude/       # Oclif CLI commands (user-facing)
 │   ├── ask.ts             # Send a natural-language prompt to the agent
-│   ├── list.ts            # List skills, commands, tools, agents, MCP servers
+│   ├── list/              # List capabilities: index.ts (all) + skills, commands, tools, agents, mcp-servers
 │   ├── run.ts             # Execute a slash command or skill by name
 │   ├── auth/              # Profile management (add, delete, list, profile, test, update)
 │   └── workspace/         # Workspace management (add, default, delete, list, update)
 ├── agent/
 │   ├── agent-api.ts       # AgentApi class wrapping claude-agent-sdk query()
 │   ├── agent-client.ts    # Singleton wrapper functions (ask, list, run, testConnection)
+│   ├── profile-config.ts  # Profile resolution (loadAgentConfig)
 │   └── usage.ts           # formatUsageSummary helper
-├── config.ts              # Profiles, workspaces, path helpers (readAgentConfig, readWorkspace, etc.)
+├── hooks/
+│   └── init/register-capability-commands.ts  # init hook: registers cached skills/commands as first-class commands
+├── capability-commands.ts # Capabilities cache (capabilities.json) + dynamic oclif command factory/registration
+├── list-command.ts        # ListCommand base class shared by the list/* commands (category filter + cache refresh)
+├── workspace-config.ts    # Workspace entries {mode, repos}, path helpers (readWorkspace, etc.)
+├── workspace-bash.ts      # Workspace context: local dirs or just-bash sandbox (git clone + virtual fs)
 └── format.ts              # TOON output formatting
 ```
 
 ### Key Architectural Patterns
 
 **1. Three-Tier Command Pattern:**
+
 - **Commands** (`src/commands/claude/`) — thin Oclif wrappers that parse args/flags
 - **Client Layer** (`agent-client.ts`) — functional wrappers with singleton `AgentApi` instance
 - **API Layer** (`agent-api.ts`) — `AgentApi` class that drives the SDK's `query()` async generator
 
 **2. ApiResult Pattern:**
 All API functions return `ApiResult`:
+
 ```typescript
 interface ApiResult {
   data?: unknown
@@ -64,27 +72,42 @@ interface ApiResult {
 }
 ```
 
-**3. AgentApi drives the SDK generator:**
+**3. Skills/slash commands as CLI commands (capability-commands.ts + hooks/):**
+The `init` hook exposes skills and slash commands directly as `claude <name> [input]`:
+
+- **`init` hook (hooks/init/register-capability-commands.ts):** at startup, reads the capabilities cache (`<cacheDir>/capabilities.json`, written by `claude list` via `ListCommand.refreshCapabilityCache`) and injects one dynamic oclif command per skill/slash command into the Config's internal `_commands` map (`registerCapabilityCommands`). Registered names appear in `claude help` with the same flags as `claude run`; each dynamic command forwards its raw argv to `claude run <name>` (slash commands get a `/` prefix). Existing command ids and topics are never replaced, so built-ins always win. Run `claude list` to (re)populate the cache.
+
+**4. AgentApi drives the SDK generator:**
 `AgentApi.ask()` iterates the `query()` async generator, collects `assistant` messages (text blocks and tool-use blocks) and the final `result` message. `AgentApi.list()` aborts after the `system/init` message to cheaply enumerate available capabilities. `AgentApi.run()` dispatches to `ask()` with either a slash-command prompt or a skills-scoped prompt.
 
-**4. Profiles + Workspaces (config.ts):**
+**5. Profiles + Workspaces (profile-config.ts / workspace-config.ts):**
 Config lives at `~/.config/claude/claude-config.json`:
+
 ```json
 {
   "defaultProfile": "work",
   "defaultWorkspace": "proj01",
   "profiles": {
-    "default": { "apiKey": "sk-...", "apiUrl": "", "models": { "haiku": "...", "opus": "...", "sonnet": "..." } },
-    "work":    { "apiKey": "sk-...", "apiUrl": "https://custom/v1" }
+    "default": {"apiKey": "sk-...", "apiUrl": "", "models": {"haiku": "...", "opus": "...", "sonnet": "..."}},
+    "work": {"apiKey": "sk-...", "apiUrl": "https://custom/v1"}
   },
   "workspaces": {
-    "proj01": { "repo-a": "~/code/repo-a", "repo-b": "~/code/repo-b" }
+    "proj01": {"mode": "local", "repos": {"repo-a": "~/code/repo-a", "repo-b": "~/code/repo-b"}},
+    "proj02": {"mode": "sandbox", "repos": {"repo-c": "https://github.com/org/repo-c.git"}}
   }
 }
 ```
+
 - `readAgentConfig(configDir, log, profileName?)` resolves the profile (falls back to `defaultProfile`).
-- `readWorkspace(configDir, log, workspaceName?)` resolves the workspace (falls back to `defaultWorkspace`) and returns a `Record<repoName, absPath>`.
-- When a workspace is loaded, `ask` builds a system prompt listing the repo directories, sets `cwd` to the common parent, and passes `additionalDirectories` to the SDK.
+- `readWorkspace(configDir, log, workspaceName?)` resolves the named workspace and returns a `WorkspaceEntry` (`{mode, repos}`). Without an explicit name it returns `undefined` (no `defaultWorkspace` fallback), so `ask`/`run`/`list` run against the current directory. `defaultWorkspace` is only used by the `workspace` management commands (`default`, `update`).
+- Workspace `mode` is set via `workspace add/update --mode`, not on `ask`/`run`.
+
+**6. Workspace modes (workspace-bash.ts):**
+
+`buildWorkspaceContext({cacheDir, log, mode, repoFilter, repos, workspaceLabel})` turns a workspace into agent run context:
+
+- **`local` mode** — repo paths are real directories: `ask`/`run` build a system prompt listing them, set `cwd` to the common parent (`commonParentDir`), and pass `additionalDirectories` to the SDK. Git URLs are skipped with a hint.
+- **`sandbox` mode** — repos are mounted copy-on-write (just-bash `OverlayFs` under `MountableFs`) at `/workspace/<repoName>` in an in-memory virtual filesystem; git URLs are shallow-cloned into `<dataDir>/workspace-repos` first (`syncGitRepo`). The returned `sandboxExec` is passed to `AgentApi.ask()`, which exposes it as an in-process MCP `bash` tool (`mcp__workspace-bash__bash` via `createSdkMcpServer`) and disallows the built-in `Bash`/`Edit`/`Glob`/`Grep`/`Read`/`Write` tools, so all agent file/shell operations stay inside the sandbox and never touch the real filesystem.
 
 ## Adding a New Command
 
@@ -94,6 +117,7 @@ Config lives at `~/.config/claude/claude-config.json`:
 4. Use `readAgentConfig(this.config.configDir, this.log.bind(this), flags.profile)` (not the old `readConfig`)
 
 **Argument ordering:** when positional args are not alphabetically sorted, wrap with eslint-disable:
+
 ```typescript
 /* eslint-disable perfectionist/sort-objects */
 static override args = {

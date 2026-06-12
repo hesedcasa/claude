@@ -80,6 +80,53 @@ describe('AgentApi', () => {
       })
     })
 
+    it('exposes a workspace-bash MCP server and blocks built-in fs tools when sandboxExec is set', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+      const sandboxExec = stub().resolves({exitCode: 0, stderr: '', stdout: 'out'})
+
+      await api.ask('hi', {sandboxExec})
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.mcpServers).to.have.property('workspace-bash')
+      expect(callArgs.options.disallowedTools).to.include('Bash')
+      expect(callArgs.options.disallowedTools).to.include('Edit')
+      expect(callArgs.options.disallowedTools).to.include('Write')
+    })
+
+    it('appends the sandbox bash tool to a non-empty allowedTools list', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+      const sandboxExec = stub().resolves({exitCode: 0, stderr: '', stdout: 'out'})
+
+      await api.ask('hi', {allowedTools: ['WebFetch'], sandboxExec})
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.allowedTools).to.deep.equal(['WebFetch', 'mcp__workspace-bash__bash'])
+    })
+
+    it('adds the sandbox bash tool to an empty allowedTools list', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+      const sandboxExec = stub().resolves({exitCode: 0, stderr: '', stdout: 'out'})
+
+      await api.ask('hi', {allowedTools: [], sandboxExec})
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.allowedTools).to.deep.equal(['mcp__workspace-bash__bash'])
+    })
+
+    it('does not configure sandbox tooling without sandboxExec', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+
+      await api.ask('hi')
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.mcpServers).to.be.undefined
+      expect(callArgs.options.disallowedTools).to.be.undefined
+    })
+
     it('forwards model option to queryFn', async () => {
       const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
       const api = new AgentApi(config, queryFn)
@@ -210,7 +257,10 @@ describe('AgentApi', () => {
 
     it('uses haiku model from config.models when configured', async () => {
       const queryFn = makeQueryStub([{result: 'OK', subtype: 'success', type: 'result'}])
-      const configWithModels = {...config, models: {haiku: 'claude-haiku-4-5-20251001', opus: 'claude-opus-4-7', sonnet: 'claude-sonnet-4-6'}}
+      const configWithModels = {
+        ...config,
+        models: {haiku: 'claude-haiku-4-5-20251001', opus: 'claude-opus-4-7', sonnet: 'claude-sonnet-4-6'},
+      }
       const api = new AgentApi(configWithModels, queryFn)
 
       await api.testConnection()
@@ -357,6 +407,20 @@ describe('AgentApi', () => {
 
       const callArgs = queryFn.firstCall.args[0]
       expect(callArgs.options.abortController).to.be.instanceOf(AbortController)
+    })
+
+    it('passes workspace options to query', async () => {
+      const queryFn = makeQueryStub([
+        // eslint-disable-next-line camelcase
+        {agents: [], mcp_servers: [], skills: [], slash_commands: [], subtype: 'init', tools: [], type: 'system'},
+      ])
+      const api = new AgentApi(config, queryFn)
+
+      await api.list({additionalDirectories: ['/repo-a', '/repo-b'], cwd: '/repo-a'})
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.cwd).to.equal('/repo-a')
+      expect(callArgs.options.additionalDirectories).to.deep.equal(['/repo-a', '/repo-b'])
     })
 
     it('returns error when no init message is emitted', async () => {

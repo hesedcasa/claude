@@ -22,9 +22,12 @@ export async function ask(config: AgentConfig, prompt: string, options?: AskOpti
   return api.ask(prompt, options)
 }
 
-export async function list(config: AgentConfig): Promise<ApiResult> {
+export async function list(
+  config: AgentConfig,
+  options?: Pick<AskOptions, 'additionalDirectories' | 'cwd'>,
+): Promise<ApiResult> {
   const api = initAgent(config)
-  return api.list()
+  return api.list(options)
 }
 
 export async function run(config: AgentConfig, name: string, input?: string, options?: AskOptions): Promise<ApiResult> {

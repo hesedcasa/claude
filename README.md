@@ -26,13 +26,25 @@ $ npm install -g @hesed/claude
 $ claude COMMAND
 running command...
 $ claude (--version)
-@hesed/claude/0.1.0 linux-x64 node-v20.20.2
+@hesed/claude/0.1.0 darwin-arm64 node-v22.14.0
 $ claude --help [COMMAND]
 USAGE
   $ claude COMMAND
 ...
 ```
 <!-- usagestop -->
+
+# Running skills and slash commands directly
+
+Any skill or slash command the agent can see (enumerate them with `claude list`) can be invoked as if it were a built-in CLI command — no `run` needed:
+
+```sh-session
+$ claude claude review "check this branch"     # same as: claude claude run review "check this branch"
+$ claude claude /help                          # same as: claude claude run /help
+$ claude claude review "this repo" -w proj01   # flags are forwarded to run
+```
+
+Built-in commands and topics (`ask`, `run`, `list`, `auth`, `workspace`) always take precedence; only unknown names are dispatched to `run`. Quote multi-word input — unquoted words after the name are re-joined before being passed to the agent.
 
 # Commands
 
@@ -45,6 +57,11 @@ USAGE
 * [`claude claude auth test`](#claude-claude-auth-test)
 * [`claude claude auth update`](#claude-claude-auth-update)
 * [`claude claude list`](#claude-claude-list)
+* [`claude claude list agents`](#claude-claude-list-agents)
+* [`claude claude list commands`](#claude-claude-list-commands)
+* [`claude claude list mcp-servers`](#claude-claude-list-mcp-servers)
+* [`claude claude list skills`](#claude-claude-list-skills)
+* [`claude claude list tools`](#claude-claude-list-tools)
 * [`claude claude run NAME [INPUT]`](#claude-claude-run-name-input)
 * [`claude claude workspace add`](#claude-claude-workspace-add)
 * [`claude claude workspace default`](#claude-claude-workspace-default)
@@ -67,7 +84,7 @@ ARGUMENTS
 FLAGS
   -m, --model=<value>        Model to use (e.g. claude-opus-4-7)
   -p, --profile=<value>      Authentication profile name
-  -w, --workspace=<value>    Workspace name (uses default workspace if omitted)
+  -w, --workspace=<value>    Workspace name (uses current directory if omitted)
       --allow-tools=<value>  Comma-separated list of tools the agent may use (e.g. Read,Edit,Glob)
       --repo=<value>         Filter workspace context to this repo name
       --stream               Stream assistant text as it arrives
@@ -95,16 +112,16 @@ Add Claude Agent SDK authentication
 
 ```
 USAGE
-  $ claude claude auth add -p <value> -k <value> -u <value> [--json] [--opus <value>] [--sonnet <value>] [--haiku
+  $ claude claude auth add -p <value> -k <value> [--json] [-u <value>] [--opus <value>] [--sonnet <value>] [--haiku
     <value>]
 
 FLAGS
-  -k, --key=<value>      (required) Anthropic API key
-  -p, --profile=<value>  (required) Profile name:
-  -u, --url=<value>      (required) Anthropic API base URL (blank for default)
-      --haiku=<value>    Haiku model ID mapping (blank for default)
-      --opus=<value>     Opus model ID mapping (blank for default)
-      --sonnet=<value>   Sonnet model ID mapping (blank for default)
+  -k, --apiKey=<value>   (required) Anthropic API key
+  -p, --profile=<value>  (required) Profile name
+  -u, --apiUrl=<value>   Anthropic API base URL (blank for default)
+      --haiku=<value>    Haiku model ID override
+      --opus=<value>     Opus model ID override
+      --sonnet=<value>   Sonnet model ID override
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -115,7 +132,7 @@ DESCRIPTION
 EXAMPLES
   $ claude claude auth add
 
-  $ claude claude auth add --profile work
+  $ claude claude auth add -p prod
 ```
 
 _See code: [src/commands/claude/auth/add.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/auth/add.ts)_
@@ -126,10 +143,10 @@ Delete an authentication profile
 
 ```
 USAGE
-  $ claude claude auth delete -p <value> [--json]
+  $ claude claude auth delete [--json] [-p <value>]
 
 FLAGS
-  -p, --profile=<value>  (required) Profile name to delete
+  -p, --profile=<value>  Profile to delete
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -138,9 +155,9 @@ DESCRIPTION
   Delete an authentication profile
 
 EXAMPLES
-  $ claude claude auth delete --profile work
+  $ claude claude auth delete
 
-  $ claude claude auth delete --profile default
+  $ claude claude auth delete -p prod
 ```
 
 _See code: [src/commands/claude/auth/delete.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/auth/delete.ts)_
@@ -174,7 +191,7 @@ USAGE
   $ claude claude auth profile [--json] [--default <value>]
 
 FLAGS
-  --default=<value>  Profile name to set as default
+  --default=<value>  Profile to set as default
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -185,14 +202,14 @@ DESCRIPTION
 EXAMPLES
   $ claude claude auth profile
 
-  $ claude claude auth profile --default work
+  $ claude claude auth profile --default test
 ```
 
 _See code: [src/commands/claude/auth/profile.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/auth/profile.ts)_
 
 ## `claude claude auth test`
 
-Test Claude Agent SDK authentication and connection
+Test authentication and connection
 
 ```
 USAGE
@@ -205,43 +222,43 @@ GLOBAL FLAGS
   --json  Format output as json.
 
 DESCRIPTION
-  Test Claude Agent SDK authentication and connection
+  Test authentication and connection
 
 EXAMPLES
   $ claude claude auth test
 
-  $ claude claude auth test --profile work
+  $ claude claude auth test -p prod
 ```
 
 _See code: [src/commands/claude/auth/test.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/auth/test.ts)_
 
 ## `claude claude auth update`
 
-Update existing Claude Agent SDK authentication
+Update Claude Agent SDK authentication
 
 ```
 USAGE
-  $ claude claude auth update -k <value> [--json] [-p <value>] [-u <value>] [--opus <value>] [--sonnet <value>] [--haiku
+  $ claude claude auth update -p <value> -k <value> [--json] [-u <value>] [--opus <value>] [--sonnet <value>] [--haiku
     <value>]
 
 FLAGS
-  -k, --key=<value>      (required) Anthropic API key
-  -p, --profile=<value>  Profile name to update (default: "default")
-  -u, --url=<value>      Anthropic API base URL
-      --haiku=<value>    Haiku model ID mapping (blank to clear)
-      --opus=<value>     Opus model ID mapping (blank to clear)
-      --sonnet=<value>   Sonnet model ID mapping (blank to clear)
+  -k, --apiKey=<value>   (required) Anthropic API key
+  -p, --profile=<value>  (required) Profile name
+  -u, --apiUrl=<value>   Anthropic API base URL (blank for default)
+      --haiku=<value>    Haiku model ID override
+      --opus=<value>     Opus model ID override
+      --sonnet=<value>   Sonnet model ID override
 
 GLOBAL FLAGS
   --json  Format output as json.
 
 DESCRIPTION
-  Update existing Claude Agent SDK authentication
+  Update Claude Agent SDK authentication
 
 EXAMPLES
   $ claude claude auth update
 
-  $ claude claude auth update --profile work
+  $ claude claude auth update -p test
 ```
 
 _See code: [src/commands/claude/auth/update.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/auth/update.ts)_
@@ -252,12 +269,12 @@ List skills, slash commands, tools, subagents, and MCP servers the agent can use
 
 ```
 USAGE
-  $ claude claude list [--only <value>] [-p <value>] [--toon]
+  $ claude claude list [-p <value>] [--toon] [-w <value>]
 
 FLAGS
-  -p, --profile=<value>  Authentication profile name
-      --only=<value>     Comma-separated subset to return (skills|commands|tools|agents|mcpServers)
-      --toon             Format output as toon
+  -p, --profile=<value>    Authentication profile name
+  -w, --workspace=<value>  Workspace name (uses current directory if omitted)
+      --toon               Format output as toon
 
 DESCRIPTION
   List skills, slash commands, tools, subagents, and MCP servers the agent can use
@@ -265,12 +282,132 @@ DESCRIPTION
 EXAMPLES
   $ claude claude list
 
-  $ claude claude list --only skills
+  $ claude claude list --toon
 
-  $ claude claude list --only skills,commands --toon
+  $ claude claude list --workspace proj01
 ```
 
-_See code: [src/commands/claude/list.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/list.ts)_
+_See code: [src/commands/claude/list/index.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/list/index.ts)_
+
+## `claude claude list agents`
+
+List subagents the agent can use
+
+```
+USAGE
+  $ claude claude list agents [-p <value>] [--toon] [-w <value>]
+
+FLAGS
+  -p, --profile=<value>    Authentication profile name
+  -w, --workspace=<value>  Workspace name (uses current directory if omitted)
+      --toon               Format output as toon
+
+DESCRIPTION
+  List subagents the agent can use
+
+EXAMPLES
+  $ claude claude list agents
+
+  $ claude claude list agents --toon
+```
+
+_See code: [src/commands/claude/list/agents.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/list/agents.ts)_
+
+## `claude claude list commands`
+
+List slash commands the agent can use
+
+```
+USAGE
+  $ claude claude list commands [-p <value>] [--toon] [-w <value>]
+
+FLAGS
+  -p, --profile=<value>    Authentication profile name
+  -w, --workspace=<value>  Workspace name (uses current directory if omitted)
+      --toon               Format output as toon
+
+DESCRIPTION
+  List slash commands the agent can use
+
+EXAMPLES
+  $ claude claude list commands
+
+  $ claude claude list commands --toon
+```
+
+_See code: [src/commands/claude/list/commands.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/list/commands.ts)_
+
+## `claude claude list mcp-servers`
+
+List MCP servers the agent can use
+
+```
+USAGE
+  $ claude claude list mcp-servers [-p <value>] [--toon] [-w <value>]
+
+FLAGS
+  -p, --profile=<value>    Authentication profile name
+  -w, --workspace=<value>  Workspace name (uses current directory if omitted)
+      --toon               Format output as toon
+
+DESCRIPTION
+  List MCP servers the agent can use
+
+EXAMPLES
+  $ claude claude list mcp-servers
+
+  $ claude claude list mcp-servers --toon
+```
+
+_See code: [src/commands/claude/list/mcp-servers.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/list/mcp-servers.ts)_
+
+## `claude claude list skills`
+
+List skills the agent can use
+
+```
+USAGE
+  $ claude claude list skills [-p <value>] [--toon] [-w <value>]
+
+FLAGS
+  -p, --profile=<value>    Authentication profile name
+  -w, --workspace=<value>  Workspace name (uses current directory if omitted)
+      --toon               Format output as toon
+
+DESCRIPTION
+  List skills the agent can use
+
+EXAMPLES
+  $ claude claude list skills
+
+  $ claude claude list skills --toon
+```
+
+_See code: [src/commands/claude/list/skills.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/list/skills.ts)_
+
+## `claude claude list tools`
+
+List tools the agent can use
+
+```
+USAGE
+  $ claude claude list tools [-p <value>] [--toon] [-w <value>]
+
+FLAGS
+  -p, --profile=<value>    Authentication profile name
+  -w, --workspace=<value>  Workspace name (uses current directory if omitted)
+      --toon               Format output as toon
+
+DESCRIPTION
+  List tools the agent can use
+
+EXAMPLES
+  $ claude claude list tools
+
+  $ claude claude list tools --toon
+```
+
+_See code: [src/commands/claude/list/tools.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/list/tools.ts)_
 
 ## `claude claude run NAME [INPUT]`
 
@@ -278,7 +415,8 @@ Execute a slash command or skill by name
 
 ```
 USAGE
-  $ claude claude run NAME [INPUT] [--allow-tools <value>] [-p <value>] [--stream] [--system <value>] [--toon]
+  $ claude claude run NAME [INPUT] [--allow-tools <value>] [-p <value>] [--repo <value>] [--stream] [--system
+    <value>] [--toon] [-w <value>]
 
 ARGUMENTS
   NAME     Slash command (e.g. /help) or skill name
@@ -286,7 +424,9 @@ ARGUMENTS
 
 FLAGS
   -p, --profile=<value>      Authentication profile name
+  -w, --workspace=<value>    Workspace name (uses current directory if omitted)
       --allow-tools=<value>  Comma-separated list of tools the agent may use (e.g. Read,Edit,Glob)
+      --repo=<value>         Filter workspace context to this repo name
       --stream               Stream assistant text as it arrives
       --system=<value>       Custom system prompt for the agent
       --toon                 Format output as toon
@@ -300,6 +440,8 @@ EXAMPLES
   $ claude claude run review "this branch"
 
   $ claude claude run /clear --stream
+
+  $ claude claude run review "this repo" --workspace proj01
 ```
 
 _See code: [src/commands/claude/run.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/run.ts)_
@@ -310,11 +452,14 @@ Add a workspace with named repository directories
 
 ```
 USAGE
-  $ claude claude workspace add --repo <value>... -w <value> [--json]
+  $ claude claude workspace add --repo <value>... -w <value> [--json] [--mode local|sandbox]
 
 FLAGS
   -w, --workspace=<value>  (required) Workspace name
-      --repo=<value>...    (required) Named repo entry as name=path (repeatable)
+      --mode=<option>      [default: local] Workspace mode: 'local' exposes repo directories on the real filesystem,
+                           'sandbox' mounts them (cloning git URLs) into a virtual bash where agent shell commands run
+                           <options: local|sandbox>
+      --repo=<value>...    (required) Named repo entry as name=path or name=git-url (repeatable)
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -324,6 +469,8 @@ DESCRIPTION
 
 EXAMPLES
   $ claude claude workspace add --workspace proj01 --repo repo01=/path/to/repo01 --repo repo02=/path/to/repo02
+
+  $ claude claude workspace add --workspace proj02 --mode sandbox --repo repo01=https://github.com/org/repo01.git
 ```
 
 _See code: [src/commands/claude/workspace/add.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/workspace/add.ts)_
@@ -407,10 +554,15 @@ Update repositories in an existing workspace
 
 ```
 USAGE
-  $ claude claude workspace update [--json] [--remove-repo <value>...] [--repo <value>...] [-w <value>]
+  $ claude claude workspace update [--json] [--mode local|sandbox] [--remove-repo <value>...] [--repo <value>...] [-w
+  <value>]
 
 FLAGS
   -w, --workspace=<value>       Workspace name (default: default workspace)
+      --mode=<option>           Workspace mode: 'local' exposes repo directories on the real filesystem, 'sandbox'
+                                mounts them (cloning git URLs) into a virtual bash where agent shell commands run
+                                (default: keep current mode)
+                                <options: local|sandbox>
       --remove-repo=<value>...  Repo name to remove from the workspace (repeatable)
       --repo=<value>...         Named repo entry as name=path to add/update (repeatable, merges into existing)
 
@@ -424,6 +576,8 @@ EXAMPLES
   $ claude claude workspace update --workspace proj01 --repo repo01=/new/path --repo repo03=/path/to/repo03
 
   $ claude claude workspace update --workspace proj01 --remove-repo repo02
+
+  $ claude claude workspace update --workspace proj01 --mode sandbox
 ```
 
 _See code: [src/commands/claude/workspace/update.ts](https://github.com/hesedcasa/claude/blob/v0.1.0/src/commands/claude/workspace/update.ts)_

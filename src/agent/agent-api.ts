@@ -1,4 +1,10 @@
-import {query, type SDKMessage} from '@anthropic-ai/claude-agent-sdk'
+import {createSdkMcpServer, type McpServerConfig, query, type SDKMessage, tool} from '@anthropic-ai/claude-agent-sdk'
+import {z} from 'zod'
+
+import type {SandboxFs} from '../workspace-bash.js'
+
+// eslint-disable-next-line unicorn/prefer-export-from
+export type {SandboxFs}
 
 export interface ApiResult {
   data?: unknown
@@ -18,6 +24,8 @@ export interface AgentConfig {
   models?: ModelMap
 }
 
+export type SandboxExecFn = (command: string) => Promise<{exitCode: number; stderr: string; stdout: string}>
+
 export interface AskOptions {
   additionalDirectories?: string[]
   allowedTools?: string[]
@@ -25,6 +33,8 @@ export interface AskOptions {
   model?: string
   onText?: (text: string) => void
   onToolUse?: (toolName: string) => void
+  sandboxExec?: SandboxExecFn
+  sandboxFs?: SandboxFs
   skills?: 'all' | string[]
   systemPrompt?: string
 }
@@ -54,6 +64,158 @@ interface ListResult {
 
 type QueryFn = typeof query
 
+const SANDBOX_MCP_SERVER = 'workspace-bash'
+const SANDBOX_BASH_TOOL = `mcp__${SANDBOX_MCP_SERVER}__bash`
+const SANDBOX_READ_TOOL = `mcp__${SANDBOX_MCP_SERVER}__read`
+const SANDBOX_WRITE_TOOL = `mcp__${SANDBOX_MCP_SERVER}__write`
+const SANDBOX_EDIT_TOOL = `mcp__${SANDBOX_MCP_SERVER}__edit`
+const SANDBOX_TOOLS = [SANDBOX_BASH_TOOL, SANDBOX_READ_TOOL, SANDBOX_WRITE_TOOL, SANDBOX_EDIT_TOOL]
+const SANDBOXED_BUILTIN_TOOLS = ['Bash', 'Edit', 'Glob', 'Grep', 'MultiEdit', 'NotebookEdit', 'Read', 'Write']
+
+interface SandboxTooling {
+  allowedTools?: string[]
+  disallowedTools?: string[]
+  mcpServers?: Record<string, McpServerConfig>
+}
+
+/**
+ * Resolve the tool-related query options for a run. With a sandbox, the
+ * built-in fs/shell tools are blocked, the sandbox tools are exposed,
+ * and any explicit allow-list is extended to include them.
+ */
+function resolveToolOptions(options?: AskOptions): SandboxTooling {
+  if (!options?.sandboxExec) return {allowedTools: options?.allowedTools}
+
+  const sandbox = buildSandboxTooling(options.sandboxExec, options.sandboxFs)
+  const registeredTools = options.sandboxFs ? SANDBOX_TOOLS : [SANDBOX_BASH_TOOL]
+  const allowedTools =
+    options.allowedTools === undefined ? undefined : [...options.allowedTools, ...registeredTools]
+
+  return {...sandbox, allowedTools}
+}
+
+/**
+ * Expose the workspace sandbox as in-process MCP tools (bash, read, write,
+ * edit) and block the built-in filesystem/shell tools so every operation
+ * goes through the virtual filesystem instead of the real one.
+ */
+function buildSandboxTooling(sandboxExec: SandboxExecFn, sandboxFs?: SandboxFs): SandboxTooling {
+  const bashTool = tool(
+    'bash',
+    'Run a bash command in the sandboxed workspace filesystem. Workspace repos are mounted under /workspace/<repoName>.',
+    {command: z.string().describe('Bash command to execute')},
+    async ({command}) => {
+      const result = await sandboxExec(command)
+      const text = [result.stdout, result.stderr].filter(Boolean).join('\n')
+      return {
+        content: [{text: text || `(exit code ${result.exitCode})`, type: 'text' as const}],
+        isError: result.exitCode !== 0,
+      }
+    },
+  )
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tools: ReturnType<typeof tool<any>>[] = [bashTool]
+
+  if (sandboxFs) {
+    const readTool = tool(
+      'read',
+      'Read a file or list a directory in the sandboxed workspace.',
+      {
+        /* eslint-disable perfectionist/sort-objects */
+        path: z.string().describe('Absolute path to the file or directory'),
+        offset: z.number().optional().describe('Line number to start from (1-indexed)'),
+        limit: z.number().optional().describe('Maximum number of lines to read'),
+        /* eslint-enable perfectionist/sort-objects */
+      },
+      async ({limit, offset, path}) => {
+        try {
+          const stat = await sandboxFs.stat(path)
+          if (stat.isDirectory) {
+            const entries = await sandboxFs.readdir(path)
+            return {content: [{text: entries.join('\n') || '(empty directory)', type: 'text' as const}]}
+          }
+
+          const content = await sandboxFs.readFile(path)
+          const lines = content.split('\n')
+          const start = offset ? Math.max(0, offset - 1) : 0
+          const end = limit ? start + limit : lines.length
+          const slice = lines.slice(start, end).join('\n')
+          return {content: [{text: slice, type: 'text' as const}]}
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error)
+          return {content: [{text: msg, type: 'text' as const}], isError: true}
+        }
+      },
+    )
+
+    const writeTool = tool(
+      'write',
+      'Write content to a file in the sandboxed workspace. Creates parent directories as needed.',
+      {
+        /* eslint-disable perfectionist/sort-objects */
+        path: z.string().describe('Absolute path to the file'),
+        content: z.string().describe('Content to write'),
+        /* eslint-enable perfectionist/sort-objects */
+      },
+      async ({content, path}) => {
+        try {
+          await sandboxFs.writeFile(path, content)
+          return {content: [{text: `Wrote ${content.length} bytes to ${path}`, type: 'text' as const}]}
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error)
+          return {content: [{text: msg, type: 'text' as const}], isError: true}
+        }
+      },
+    )
+
+    const editTool = tool(
+      'edit',
+      'Replace an exact unique string in a file in the sandboxed workspace.',
+      {
+        /* eslint-disable camelcase, perfectionist/sort-objects */
+        path: z.string().describe('Absolute path to the file'),
+        old_string: z.string().describe('Exact text to replace (must be unique in the file)'),
+        new_string: z.string().describe('Replacement text'),
+        /* eslint-enable camelcase, perfectionist/sort-objects */
+      },
+      // eslint-disable-next-line camelcase
+      async ({new_string, old_string, path}) => {
+        try {
+          const content = await sandboxFs.readFile(path)
+          const count = content.split(old_string).length - 1
+          if (count === 0) {
+            return {
+              content: [{text: `Text not found in ${path}`, type: 'text' as const}],
+              isError: true,
+            }
+          }
+
+          if (count > 1) {
+            return {
+              content: [{text: `Found ${count} occurrences; provide more context to make the match unique`, type: 'text' as const}],
+              isError: true,
+            }
+          }
+
+          await sandboxFs.writeFile(path, content.replace(old_string, new_string))
+          return {content: [{text: `Edited ${path}`, type: 'text' as const}]}
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error)
+          return {content: [{text: msg, type: 'text' as const}], isError: true}
+        }
+      },
+    )
+
+    tools.push(readTool, writeTool, editTool)
+  }
+
+  return {
+    disallowedTools: SANDBOXED_BUILTIN_TOOLS,
+    mcpServers: {[SANDBOX_MCP_SERVER]: createSdkMcpServer({name: SANDBOX_MCP_SERVER, tools})},
+  }
+}
+
 /**
  * Claude Agent SDK client. Wraps the SDK's `query()` async generator
  * and surfaces a simple ask/testConnection API consistent with the
@@ -73,13 +235,17 @@ export class AgentApi {
    */
   async ask(prompt: string, options?: AskOptions): Promise<ApiResult> {
     try {
+      const toolOptions = resolveToolOptions(options)
+
       const iterator = this.queryFn({
         options: {
           additionalDirectories: options?.additionalDirectories,
-          allowedTools: options?.allowedTools,
+          allowedTools: toolOptions.allowedTools,
           cwd: options?.cwd,
+          disallowedTools: toolOptions.disallowedTools,
           env: this.buildEnv(),
-          model: options?.model,
+          mcpServers: toolOptions.mcpServers,
+          model: options?.model ?? this.config.models?.sonnet,
           permissionMode: 'bypassPermissions',
           skills: options?.skills,
           systemPrompt: options?.systemPrompt,
@@ -133,13 +299,15 @@ export class AgentApi {
    * available to the current session. Reads the SDK's init system message
    * and aborts the run immediately afterwards.
    */
-  async list(): Promise<ApiResult> {
+  async list(options?: Pick<AskOptions, 'additionalDirectories' | 'cwd'>): Promise<ApiResult> {
     const controller = new AbortController()
     let initData: ListResult | undefined
     try {
       const iterator = this.queryFn({
         options: {
           abortController: controller,
+          additionalDirectories: options?.additionalDirectories,
+          cwd: options?.cwd,
           env: this.buildEnv(),
           permissionMode: 'bypassPermissions',
         },

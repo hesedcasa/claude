@@ -5,7 +5,9 @@ import {type SinonStub, stub} from 'sinon'
 
 describe('agent:run', () => {
   let AgentRun: any
-  let readAgentConfigStub: SinonStub
+  let loadAgentConfigStub: SinonStub
+  let readWorkspaceStub: SinonStub
+  let buildWorkspaceContextStub: SinonStub
   let runStub: SinonStub
   let clearClientsStub: SinonStub
   let formatAsToonStub: SinonStub
@@ -15,15 +17,19 @@ describe('agent:run', () => {
   const mockResult = {data: {result: 'done', toolsUsed: [], usage: mockUsage}, success: true}
 
   beforeEach(async () => {
-    readAgentConfigStub = stub().resolves(mockAuth)
+    loadAgentConfigStub = stub().resolves(mockAuth)
+    readWorkspaceStub = stub().resolves()
+    buildWorkspaceContextStub = stub().resolves()
     runStub = stub().resolves(mockResult)
     clearClientsStub = stub()
     formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock('../../../src/commands/claude/run.js', {
       '../../../src/agent/agent-client.js': {clearClients: clearClientsStub, run: runStub},
-      '../../../src/config.js': {readAgentConfig: readAgentConfigStub},
-      '../../../src/format.js': {formatAsToon: formatAsToonStub},
+      '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
+      '../../../src/workspace-bash.js': {buildWorkspaceContext: buildWorkspaceContextStub},
+      '../../../src/workspace-config.js': {readWorkspace: readWorkspaceStub},
+      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     AgentRun = imported.default
   })
@@ -39,7 +45,7 @@ describe('agent:run', () => {
 
     await cmd.run()
 
-    expect(readAgentConfigStub.calledOnce).to.be.true
+    expect(loadAgentConfigStub.calledOnce).to.be.true
     expect(runStub.calledOnce).to.be.true
     expect(clearClientsStub.calledOnce).to.be.true
     expect(logJsonStub.firstCall.args[0]).to.deep.equal(mockResult)
@@ -79,7 +85,7 @@ describe('agent:run', () => {
   })
 
   it('returns early when config is missing', async () => {
-    readAgentConfigStub.resolves(null)
+    loadAgentConfigStub.resolves(null)
 
     const cmd = new AgentRun(['/help'], {
       configDir: '/tmp/test-agent-config',
@@ -142,7 +148,7 @@ describe('agent:run', () => {
     expect(logStub.calledWith('toon-output')).to.be.true
   })
 
-  it('passes --profile to readAgentConfig', async () => {
+  it('passes --profile to loadAgentConfig', async () => {
     const cmd = new AgentRun(['/help', '--profile', 'work'], {
       configDir: '/tmp/test-agent-config',
       root: process.cwd(),
@@ -152,6 +158,31 @@ describe('agent:run', () => {
 
     await cmd.run()
 
-    expect(readAgentConfigStub.firstCall.args[2]).to.equal('work')
+    expect(loadAgentConfigStub.firstCall.args[2]).to.equal('work')
+  })
+
+  it('applies workspace context for a sandbox-mode workspace', async () => {
+    readWorkspaceStub.resolves({mode: 'sandbox', repos: {'repo-a': 'https://github.com/org/repo-a.git'}})
+    const sandboxExec = stub()
+    buildWorkspaceContextStub.resolves({sandboxExec, systemPrompt: 'sandboxed'})
+
+    const cmd = new AgentRun(['review', 'this repo', '--workspace', 'proj01'], {
+      configDir: '/tmp/test-agent-config',
+      dataDir: '/tmp/test-agent-data',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    expect(readWorkspaceStub.firstCall.args[1]).to.equal('proj01')
+    const wsArgs = buildWorkspaceContextStub.firstCall.args[0]
+    expect(wsArgs.mode).to.equal('sandbox')
+    expect(wsArgs.workspaceLabel).to.equal('proj01')
+
+    const opts = runStub.firstCall.args[3]
+    expect(opts.sandboxExec).to.equal(sandboxExec)
+    expect(opts.systemPrompt).to.equal('sandboxed')
   })
 })
