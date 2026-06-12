@@ -15,9 +15,11 @@ async function testConnection(auth: AgentFlatAuth): Promise<ApiResult> {
   return connectToSdk({apiKey: auth.apiKey, apiUrl: auth.apiUrl ?? ''})
 }
 
+export const AUTH_CONFIG_FILE = 'claude-auth.json'
+
 export const authOptions: AuthCommandOptions<AgentFlatAuth> = {
   clearClients,
-  configFile: 'claude-auth.json',
+  configFile: AUTH_CONFIG_FILE,
   fields: [
     {char: 'k', description: 'Anthropic API key', name: 'apiKey', required: true, type: 'string'},
     {

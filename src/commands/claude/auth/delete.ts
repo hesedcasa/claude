@@ -1,3 +1,5 @@
 import {createAuthDeleteCommand} from '@hesed/plugin-lib'
 
-export default createAuthDeleteCommand({configFile: 'claude-auth.json'})
+import {AUTH_CONFIG_FILE} from '../../../agent/auth-options.js'
+
+export default createAuthDeleteCommand({configFile: AUTH_CONFIG_FILE})

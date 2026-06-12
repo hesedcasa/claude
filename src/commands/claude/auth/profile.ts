@@ -1,3 +1,5 @@
 import {createAuthProfileCommand} from '@hesed/plugin-lib'
 
-export default createAuthProfileCommand({configFile: 'claude-auth.json'})
+import {AUTH_CONFIG_FILE} from '../../../agent/auth-options.js'
+
+export default createAuthProfileCommand({configFile: AUTH_CONFIG_FILE})

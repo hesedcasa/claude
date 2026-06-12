@@ -2,9 +2,7 @@ import {createProfileManager} from '@hesed/plugin-lib'
 import {type Config} from '@oclif/core'
 
 import {type AgentConfig, type ModelMap} from './agent-api.js'
-import {type AgentFlatAuth} from './auth-options.js'
-
-const CONFIG_FILE = 'claude-auth.json'
+import {type AgentFlatAuth, AUTH_CONFIG_FILE} from './auth-options.js'
 
 type StoredAgentAuth = AgentFlatAuth & {models?: ModelMap}
 
@@ -13,7 +11,7 @@ export async function loadAgentConfig(
   log: (message: string) => void,
   profile?: string,
 ): Promise<AgentConfig | undefined> {
-  const pm = createProfileManager<StoredAgentAuth>(config, profile, CONFIG_FILE)
+  const pm = createProfileManager<StoredAgentAuth>(config, profile, AUTH_CONFIG_FILE)
   const auth = await pm.loadAuthConfig()
 
   if (!auth) {
