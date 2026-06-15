@@ -95,7 +95,14 @@ export function compilePoml(doc: PomlDocument): CompiledProgram {
 
   const inputNames = new Set(inputs.map((f) => f.name))
   const outputNames = new Set(outputs.map((f) => f.name))
-  const examples = doc.examples.map((ex) => exampleToDemo(ex, inputNames, outputNames))
+  // When chain-of-thought is active, only keep examples that include 'reasoning'.
+  // Examples without it produce contradictory few-shot assistant messages (showing
+  // only Sentiment: but not Reasoning:), which causes the model to skip the
+  // reasoning field and fail Ax's output validation.
+  const eligibleExamples = doc.reasoning
+    ? doc.examples.filter((ex) => 'reasoning' in ex.outputs)
+    : doc.examples
+  const examples = eligibleExamples.map((ex) => exampleToDemo(ex, inputNames, outputNames))
 
   return {description, examples, inputs, outputs, signature}
 }
@@ -129,7 +136,14 @@ export async function runAxProgram(options: RunProgramOptions): Promise<ApiResul
       apiKey,
       ...(model && {config: {model: model as unknown as AxAIAnthropicModel}}),
     })
-    if (apiUrl) llm.setAPIURL(apiUrl)
+    if (apiUrl) {
+      // The Anthropic SDK convention: apiUrl is the base (e.g. https://api.z.ai/api/anthropic)
+      // and each SDK appends /v1/messages. Ax only appends /messages, so we add /v1 here
+      // to produce the same full path.
+      const base = apiUrl.replace(/\/+$/, '')
+      const axBase = base.endsWith('/v1') ? base : `${base}/v1`
+      llm.setAPIURL(axBase)
+    }
 
     const gen = ax(program.signature)
     if (program.examples.length > 0) {
