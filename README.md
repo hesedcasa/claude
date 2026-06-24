@@ -47,6 +47,32 @@ $ claude claude review "this repo" -w proj01   # flags are forwarded to run
 
 Built-in commands and topics (`ask`, `run`, `list`, `auth`, `workspace`) always take precedence; only unknown names are dispatched to `run`. Quote multi-word input — unquoted words after the name are re-joined before being passed to the agent.
 
+# Running POML prompts as DSPy programs
+
+`claude poml` reads a [POML](https://github.com/microsoft/poml) file, converts it into a DSPy-style program using [Ax](https://github.com/ax-llm/ax), and executes it in memory (nothing is written to disk).
+
+The supported POML subset maps onto DSPy concepts:
+
+| POML | DSPy / Ax |
+| --- | --- |
+| `<role>` / `<task>` / `<hint>` / `<output-format>` | signature description (the instructions) |
+| `<input name=.. type=.. description=..>` | typed input field |
+| `<output name=.. type=.. description=..>` | typed output field (`type="class"` uses the description as the allowed options) |
+| `<example>` with `<input>`/`<output>` children | few-shot demonstration |
+| `<let name=.. value=..>` + `{{ var }}` | template variables |
+| root `module="chain-of-thought"` / `reasoning="true"` / `<reasoning/>` | prepends a `reasoning` output field |
+
+```sh-session
+# Preview the compiled signature without calling a model
+$ claude claude poml examples/sentiment.poml "Absolutely love it!" --dry-run
+
+# Execute in memory (single input field maps from the positional argument)
+$ claude claude poml examples/sentiment.poml "Absolutely love it!"
+
+# Multiple input fields: pass values as JSON, and template vars with --var
+$ claude claude poml classify.poml --input '{"review":"..."}' --var domain=books
+```
+
 # Commands
 
 <!-- commands -->

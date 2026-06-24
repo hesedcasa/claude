@@ -1,0 +1,19 @@
+<poml module="chain-of-thought">
+  <role>You are an expert product review analyst.</role>
+  <task>Classify the sentiment of the given product review.</task>
+
+  <let name="domain" value="consumer electronics" />
+  <output-format>Choose the single best sentiment class for the {{domain}} review.</output-format>
+
+  <input name="review" type="string" description="The customer review text" />
+  <output name="sentiment" type="class" description="positive, negative, neutral" />
+
+  <example>
+    <input name="review">This charger stopped working after two days.</input>
+    <output name="sentiment">negative</output>
+  </example>
+  <example>
+    <input name="review">Battery life is incredible and it charges fast.</input>
+    <output name="sentiment">positive</output>
+  </example>
+</poml>
