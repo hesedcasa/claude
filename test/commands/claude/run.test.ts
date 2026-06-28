@@ -185,4 +185,27 @@ describe('agent:run', () => {
     expect(opts.sandboxExec).to.equal(sandboxExec)
     expect(opts.systemPrompt).to.equal('sandboxed')
   })
+
+  it('errors instead of running when a requested workspace cannot be resolved', async () => {
+    readWorkspaceStub.resolves({mode: 'local', repos: {'repo-a': '~/code/repo-a'}})
+    buildWorkspaceContextStub.resolves()
+
+    const cmd = new AgentRun(['review', 'this repo', '--workspace', 'proj01'], {
+      configDir: '/tmp/test-agent-config',
+      dataDir: '/tmp/test-agent-data',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+
+    let errored = false
+    try {
+      await cmd.run()
+    } catch {
+      errored = true
+    }
+
+    expect(errored).to.be.true
+    expect(runStub.called).to.be.false
+  })
 })

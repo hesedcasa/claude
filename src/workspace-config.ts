@@ -82,8 +82,11 @@ export async function readWorkspaces(configDir: string): Promise<undefined | Wor
   try {
     const raw = await fs.readJSON(cp)
     return (raw.workspaces ?? {}) as Workspaces
-  } catch {
-    return undefined
+  } catch (error: unknown) {
+    // Missing config file is expected (no workspaces saved yet); surface anything else
+    // (e.g. malformed JSON) so config corruption isn't silently hidden.
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return undefined
+    throw error
   }
 }
 
@@ -94,8 +97,10 @@ export async function readWorkspace(configDir: string, workspaceName?: string): 
   let file: WorkspaceConfigFile
   try {
     file = await fs.readJSON(cp)
-  } catch {
-    return undefined
+  } catch (error: unknown) {
+    // Missing config file is expected; surface anything else (e.g. malformed JSON).
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return undefined
+    throw error
   }
 
   const workspaces = file.workspaces ?? {}

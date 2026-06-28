@@ -59,8 +59,14 @@ export default class AgentRun extends Command {
         mode: workspace.mode,
         repoFilter: flags.repo,
         repos: workspace.repos,
-        workspaceLabel: workspaceName ?? 'pwd',
+        workspaceLabel: workspaceName,
       })
+
+      if (!workspaceContext) {
+        this.error(
+          `Workspace '${workspaceName}' could not be resolved${flags.repo ? ` for repo '${flags.repo}'` : ''}. Refusing to run against the current directory.`,
+        )
+      }
     }
 
     const systemPrompt = workspaceContext

@@ -2,28 +2,38 @@ import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags} from '@oclif/core'
 import {default as path} from 'node:path'
 
-import {ask, clearClients} from '../../agent/agent-client.js'
-import {loadAgentConfig} from '../../agent/profile-config.js'
-import {buildWorkspaceContext, type WorkspaceContext} from '../../workspace-bash.js'
-import {readWorkspace} from '../../workspace-config.js'
+import {ask, clearClients} from '../../../agent/agent-client.js'
+import {loadAgentConfig} from '../../../agent/profile-config.js'
+import {readWorkflow} from '../../../workflow-config.js'
+import {buildWorkspaceContext, type WorkspaceContext} from '../../../workspace-bash.js'
+import {readWorkspace} from '../../../workspace-config.js'
 
-export default class AgentAsk extends Command {
+function resolveSystemPrompt(
+  customSystem: string | undefined,
+  workspaceContext: undefined | WorkspaceContext,
+): string | undefined {
+  if (!workspaceContext) return customSystem
+  return customSystem ? `${customSystem}\n\n${workspaceContext.systemPrompt}` : workspaceContext.systemPrompt
+}
+
+/* eslint-disable perfectionist/sort-objects */
+export default class AgentWorkflowRun extends Command {
   static override args = {
-    prompt: Args.string({description: 'Natural-language prompt to send to the agent', required: true}),
+    name: Args.string({description: 'Workflow name', required: true}),
+    input: Args.string({description: 'Additional input to append to the workflow prompt', required: false}),
   }
-  static override description = 'Ask the Claude agent a natural-language question'
+  /* eslint-enable perfectionist/sort-objects */
+  static override description = 'Run a saved workflow by name'
   static override examples = [
-    '<%= config.bin %> <%= command.id %> "What is the capital of France?"',
-    '<%= config.bin %> <%= command.id %> "List files in src" --allow-tools Read,Glob',
-    '<%= config.bin %> <%= command.id %> "Summarise changes" --workspace proj01',
-    '<%= config.bin %> <%= command.id %> "Review changes" --workspace proj01 --repo repo01',
+    '<%= config.bin %> <%= command.id %> daily-review',
+    '<%= config.bin %> <%= command.id %> daily-review "focus on auth module"',
+    '<%= config.bin %> <%= command.id %> daily-review --stream',
   ]
   static override flags = {
     'allow-tools': Flags.string({
       description: 'Comma-separated list of tools the agent may use (e.g. Read,Edit,Glob)',
       required: false,
     }),
-    model: Flags.string({char: 'm', description: 'Model to use (e.g. claude-opus-4-7)', required: false}),
     profile: Flags.string({char: 'p', description: 'Authentication profile name', required: false}),
     repo: Flags.string({description: 'Filter workspace context to this repo name', required: false}),
     stream: Flags.boolean({description: 'Stream assistant text as it arrives', required: false}),
@@ -31,23 +41,27 @@ export default class AgentAsk extends Command {
     toon: Flags.boolean({description: 'Format output as toon', required: false}),
     workspace: Flags.string({
       char: 'w',
-      description: 'Workspace name (uses current directory if omitted)',
+      description: 'Override the workflow workspace (uses workflow setting if omitted)',
       required: false,
     }),
   }
 
-  // eslint-disable-next-line complexity
   public async run(): Promise<void> {
-    const {args, flags} = await this.parse(AgentAsk)
+    const {args, flags} = await this.parse(AgentWorkflowRun)
     const config = await loadAgentConfig(this.config, this.log.bind(this), flags.profile)
     if (!config) return
 
-    let workspaceContext: undefined | WorkspaceContext
-    const workspaceName = flags.workspace
+    const workflow = await readWorkflow(this.config.configDir, args.name)
+    if (!workflow) {
+      this.error(`Workflow '${args.name}' does not exist.`)
+    }
 
+    const prompt = args.input ? `${workflow.prompt}\n\n${args.input}` : workflow.prompt
+    const workspaceName = flags.workspace ?? workflow.workspace
+
+    let workspaceContext: undefined | WorkspaceContext
     if (workspaceName) {
       const workspace = await readWorkspace(this.config.configDir, workspaceName)
-
       if (!workspace || Object.keys(workspace.repos).length === 0) {
         this.error(`Workspace '${workspaceName}' does not exist.`)
       }
@@ -60,16 +74,9 @@ export default class AgentAsk extends Command {
         repos: workspace.repos,
         workspaceLabel: workspaceName,
       })
-
-      if (!workspaceContext) {
-        this.error(
-          `Workspace '${workspaceName}' could not be resolved${flags.repo ? ` for repo '${flags.repo}'` : ''}. Refusing to run against the current directory.`,
-        )
-      }
     }
 
-    const systemPrompt =
-      [flags.system, workspaceContext?.systemPrompt].filter(Boolean).join('\n\n') || undefined
+    const systemPrompt = resolveSystemPrompt(flags.system, workspaceContext)
 
     const allowedTools = flags['allow-tools']
       ? flags['allow-tools']
@@ -78,19 +85,15 @@ export default class AgentAsk extends Command {
           .filter(Boolean)
       : []
 
-    const model = flags.model
-      ? (config.models?.[flags.model as 'haiku' | 'opus' | 'sonnet'] ?? flags.model)
-      : config.models?.sonnet
-
-    const result = await ask(config, args.prompt, {
+    const result = await ask(config, prompt, {
       additionalDirectories: workspaceContext?.additionalDirectories,
       allowedTools,
       cwd: workspaceContext?.cwd ?? process.cwd(),
-      model,
       onText: flags.stream ? (text) => this.log(text) : undefined,
       onToolUse: flags.stream ? (name) => this.log(`[tool: ${name}]`) : undefined,
       sandboxExec: workspaceContext?.sandboxExec,
       sandboxFs: workspaceContext?.sandboxFs,
+      skills: workflow.skills,
       systemPrompt,
     })
     clearClients()
@@ -99,6 +102,10 @@ export default class AgentAsk extends Command {
       this.log(formatAsToon(result))
     } else {
       this.logJson(result)
+    }
+
+    if (!result.success) {
+      this.error(typeof result.error === 'string' ? result.error : 'Workflow run failed.')
     }
   }
 }

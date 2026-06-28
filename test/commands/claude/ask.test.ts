@@ -289,7 +289,7 @@ describe('agent:ask', () => {
     expect(opts.additionalDirectories).to.be.undefined
   })
 
-  it('does not set workspace context when buildWorkspaceContext returns undefined', async () => {
+  it('errors instead of running when a requested workspace cannot be resolved', async () => {
     readWorkspaceStub.resolves({mode: 'local', repos: {'repo-a': '~/code/repo-a'}})
     buildWorkspaceContextStub.resolves()
 
@@ -301,10 +301,14 @@ describe('agent:ask', () => {
     } as any)
     stub(cmd, 'logJson')
 
-    await cmd.run()
+    let errored = false
+    try {
+      await cmd.run()
+    } catch {
+      errored = true
+    }
 
-    const opts = askStub.firstCall.args[2]
-    expect(opts.additionalDirectories).to.be.undefined
-    expect(opts.sandboxExec).to.be.undefined
+    expect(errored).to.be.true
+    expect(askStub.called).to.be.false
   })
 })
