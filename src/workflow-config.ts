@@ -19,8 +19,11 @@ export async function readWorkflows(configDir: string): Promise<undefined | Work
   try {
     const raw = await fs.readJSON(configPath(configDir))
     return (raw.workflows ?? {}) as Workflows
-  } catch {
-    return undefined
+  } catch (error: unknown) {
+    // Missing config file is expected (no workflows saved yet); surface anything else
+    // (e.g. malformed JSON) so config corruption isn't silently hidden.
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return undefined
+    throw error
   }
 }
 

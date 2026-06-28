@@ -56,6 +56,19 @@ describe('workspace-config', () => {
 
       expect(result).to.be.undefined
     })
+
+    it('throws when the config file contains malformed JSON', async () => {
+      await fs.writeFile(testConfigPath, '{ not valid json')
+
+      let thrown = false
+      try {
+        await readWorkspace(testConfigDir, 'proj01')
+      } catch {
+        thrown = true
+      }
+
+      expect(thrown).to.be.true
+    })
   })
 
   describe('addWorkspace', () => {

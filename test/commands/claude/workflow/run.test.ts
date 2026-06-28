@@ -207,6 +207,48 @@ describe('agent:workflow:run', () => {
     expect(loadAgentConfigStub.firstCall.args[2]).to.equal('work')
   })
 
+  it('errors with a non-zero exit when the agent run fails', async () => {
+    askStub.resolves({error: 'agent blew up', success: false})
+
+    const cmd = new AgentWorkflowRun(['daily-review'], {
+      configDir: '/tmp/test-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+    const errorStub = stub(cmd, 'error').throws(new Error('agent blew up'))
+
+    let thrown: Error | undefined
+    try {
+      await cmd.run()
+    } catch (error) {
+      thrown = error as Error
+    }
+
+    expect(thrown?.message).to.include('agent blew up')
+    expect(errorStub.firstCall.args[0]).to.equal('agent blew up')
+  })
+
+  it('errors with a fallback message when the failure has no string error', async () => {
+    askStub.resolves({error: {code: 500}, success: false})
+
+    const cmd = new AgentWorkflowRun(['daily-review'], {
+      configDir: '/tmp/test-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+    const errorStub = stub(cmd, 'error').throws(new Error('Workflow run failed.'))
+
+    try {
+      await cmd.run()
+    } catch {
+      // expected
+    }
+
+    expect(errorStub.firstCall.args[0]).to.equal('Workflow run failed.')
+  })
+
   it('parses --allow-tools into an array', async () => {
     const cmd = new AgentWorkflowRun(['daily-review', '--allow-tools', 'Read, Glob , Edit'], {
       configDir: '/tmp/test-config',

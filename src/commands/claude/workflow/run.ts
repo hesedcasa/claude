@@ -8,6 +8,14 @@ import {readWorkflow} from '../../../workflow-config.js'
 import {buildWorkspaceContext, type WorkspaceContext} from '../../../workspace-bash.js'
 import {readWorkspace} from '../../../workspace-config.js'
 
+function resolveSystemPrompt(
+  customSystem: string | undefined,
+  workspaceContext: undefined | WorkspaceContext,
+): string | undefined {
+  if (!workspaceContext) return customSystem
+  return customSystem ? `${customSystem}\n\n${workspaceContext.systemPrompt}` : workspaceContext.systemPrompt
+}
+
 /* eslint-disable perfectionist/sort-objects */
 export default class AgentWorkflowRun extends Command {
   static override args = {
@@ -68,11 +76,7 @@ export default class AgentWorkflowRun extends Command {
       })
     }
 
-    const systemPrompt = workspaceContext
-      ? flags.system
-        ? `${flags.system}\n\n${workspaceContext.systemPrompt}`
-        : workspaceContext.systemPrompt
-      : flags.system
+    const systemPrompt = resolveSystemPrompt(flags.system, workspaceContext)
 
     const allowedTools = flags['allow-tools']
       ? flags['allow-tools']
@@ -98,6 +102,10 @@ export default class AgentWorkflowRun extends Command {
       this.log(formatAsToon(result))
     } else {
       this.logJson(result)
+    }
+
+    if (!result.success) {
+      this.error(typeof result.error === 'string' ? result.error : 'Workflow run failed.')
     }
   }
 }
