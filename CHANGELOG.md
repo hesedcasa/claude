@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/hesedcasa/claude/compare/v0.2.0...v0.3.0) (2026-06-29)
+
+
+### 🎉 Features
+
+* add workflow list and run commands ([f2bdf9a](https://github.com/hesedcasa/claude/commit/f2bdf9aba883f9b26ab2d7d8d4d81999ea7b2ddd))
+* add workflow list and run commands ([b415f5c](https://github.com/hesedcasa/claude/commit/b415f5c4ebf526a7e24d8b9ce537851a0080132b))
+* **prompt:** add saved-prompt commands with system prompt and templating ([28323e7](https://github.com/hesedcasa/claude/commit/28323e7756bb5b0735a04c9f2e63c6099550ef1b))
+* **prompt:** add saved-prompt commands with system prompt and templating ([5b53823](https://github.com/hesedcasa/claude/commit/5b53823d22bed550b90ee4418f2238bf24d9d316))
+
+
+### 🛠️ Fixes
+
+* **prompt:** build workspace system prompt before dry-run output ([3c1e73c](https://github.com/hesedcasa/claude/commit/3c1e73c31fd70da2b7cfecdfb5d0660855a4b84f))
+* **prompt:** keep --dry-run a side-effect-free preview ([c1e89fa](https://github.com/hesedcasa/claude/commit/c1e89fa49baac4f671aa1fd3352f2771a06a058c))
+* refuse to run when an explicit workspace cannot be resolved ([cd18349](https://github.com/hesedcasa/claude/commit/cd1834980943e378f0ee8588ee2a555f40739823))
+* surface config read errors and fail workflow run on agent error ([a5483fe](https://github.com/hesedcasa/claude/commit/a5483fed52b5f95cac55d4b454494fc0b7f6a9b2))
+
 ## [0.2.0](https://github.com/hesedcasa/claude/compare/v0.1.0...v0.2.0) (2026-06-12)
 
 
