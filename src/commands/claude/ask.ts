@@ -68,8 +68,7 @@ export default class AgentAsk extends Command {
       }
     }
 
-    const systemPrompt =
-      [flags.system, workspaceContext?.systemPrompt].filter(Boolean).join('\n\n') || undefined
+    const systemPrompt = [flags.system, workspaceContext?.systemPrompt].filter(Boolean).join('\n\n') || undefined
 
     const allowedTools = flags['allow-tools']
       ? flags['allow-tools']

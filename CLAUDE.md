@@ -38,6 +38,7 @@ src/
 │   ├── list/              # List capabilities: index.ts (all) + skills, commands, tools, agents, mcp-servers
 │   ├── run.ts             # Execute a slash command or skill by name
 │   ├── auth/              # Profile management (add, delete, list, profile, test, update)
+│   ├── prompt/            # Saved prompts (add, delete/rm, edit, list, run, show)
 │   └── workspace/         # Workspace management (add, default, delete, list, update)
 ├── agent/
 │   ├── agent-api.ts       # AgentApi class wrapping claude-agent-sdk query()
@@ -48,6 +49,7 @@ src/
 │   └── init/register-capability-commands.ts  # init hook: registers cached skills/commands as first-class commands
 ├── capability-commands.ts # Capabilities cache (capabilities.json) + dynamic oclif command factory/registration
 ├── list-command.ts        # ListCommand base class shared by the list/* commands (category filter + cache refresh)
+├── prompts-config.ts      # Saved prompts {body (user prompt), system, description} in claude-prompts.json (readPrompts, savePrompts, resolvePrompt); {{name}} templating via extractPlaceholders/renderPrompt (filled by `prompt run --arg name=value`)
 ├── workspace-config.ts    # Workspace entries {mode, repos}, path helpers (readWorkspace, etc.)
 ├── workspace-bash.ts      # Workspace context: local dirs or just-bash sandbox (git clone + virtual fs)
 └── format.ts              # TOON output formatting

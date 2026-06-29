@@ -112,7 +112,9 @@ describe('workspace-bash', () => {
       const repoA = path.join(tmpDir, 'repo-a')
       const ctx = await buildWorkspaceContext(base({'repo-a': repoA}, 'sandbox'))
 
-      const write = await ctx!.sandboxExec!('echo changed > /workspace/repo-a/file.txt && cat /workspace/repo-a/file.txt')
+      const write = await ctx!.sandboxExec!(
+        'echo changed > /workspace/repo-a/file.txt && cat /workspace/repo-a/file.txt',
+      )
       expect(write.stdout).to.equal('changed\n')
 
       const real = await fs.readFile(path.join(repoA, 'file.txt'), 'utf8')
@@ -142,9 +144,7 @@ describe('workspace-bash', () => {
     })
 
     it('sandboxFs stat and readdir reflect the virtual filesystem', async () => {
-      const ctx = await buildWorkspaceContext(
-        base({'repo-a': path.join(tmpDir, 'repo-a')}, 'sandbox'),
-      )
+      const ctx = await buildWorkspaceContext(base({'repo-a': path.join(tmpDir, 'repo-a')}, 'sandbox'))
       const {sandboxFs} = ctx!
 
       const stat = await sandboxFs!.stat('/workspace/repo-a')
@@ -155,9 +155,7 @@ describe('workspace-bash', () => {
     })
 
     it('sandboxFs writeFile auto-creates parent directories', async () => {
-      const ctx = await buildWorkspaceContext(
-        base({'repo-a': path.join(tmpDir, 'repo-a')}, 'sandbox'),
-      )
+      const ctx = await buildWorkspaceContext(base({'repo-a': path.join(tmpDir, 'repo-a')}, 'sandbox'))
       await ctx!.sandboxFs!.writeFile('/workspace/repo-a/new-dir/nested.txt', 'hello\n')
       expect(await ctx!.sandboxFs!.readFile('/workspace/repo-a/new-dir/nested.txt')).to.equal('hello\n')
     })

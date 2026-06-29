@@ -88,8 +88,7 @@ function resolveToolOptions(options?: AskOptions): SandboxTooling {
 
   const sandbox = buildSandboxTooling(options.sandboxExec, options.sandboxFs)
   const registeredTools = options.sandboxFs ? SANDBOX_TOOLS : [SANDBOX_BASH_TOOL]
-  const allowedTools =
-    options.allowedTools === undefined ? undefined : [...options.allowedTools, ...registeredTools]
+  const allowedTools = options.allowedTools === undefined ? undefined : [...options.allowedTools, ...registeredTools]
 
   return {...sandbox, allowedTools}
 }
@@ -193,7 +192,12 @@ function buildSandboxTooling(sandboxExec: SandboxExecFn, sandboxFs?: SandboxFs):
 
           if (count > 1) {
             return {
-              content: [{text: `Found ${count} occurrences; provide more context to make the match unique`, type: 'text' as const}],
+              content: [
+                {
+                  text: `Found ${count} occurrences; provide more context to make the match unique`,
+                  type: 'text' as const,
+                },
+              ],
               isError: true,
             }
           }
