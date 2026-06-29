@@ -87,6 +87,7 @@ describe('agent:prompt:run', () => {
   })
 
   it('previews the prompt without calling the agent on --dry-run', async () => {
+    readWorkspaceStub.resolves({mode: 'local', repos: {}})
     const cmd = new PromptRun(['summarize', '--dry-run', '--profile', 'work', '--workspace', 'proj01'], {
       configDir: '/tmp/test-config',
       root: process.cwd(),
