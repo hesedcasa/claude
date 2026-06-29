@@ -74,6 +74,22 @@ export default class PromptRun extends Command {
       this.error(`Missing values for placeholder(s): ${missing.join(', ')}. Pass them with --arg name=value.`)
     }
 
+    if (flags['dry-run']) {
+      this.logJson({
+        args: argValues,
+        body,
+        name,
+        profile: flags.profile ?? 'default',
+        repo: flags.repo,
+        system: renderedSystem,
+        workspace: flags.workspace,
+      })
+      return
+    }
+
+    const config = await loadAgentConfig(this.config, this.log.bind(this), flags.profile)
+    if (!config) return
+
     let workspaceContext: undefined | WorkspaceContext
     const workspaceName = flags.workspace
 
@@ -103,22 +119,6 @@ export default class PromptRun extends Command {
     // Workspace context (when present) is appended to the rendered system prompt.
     const systemPrompt =
       [renderedSystem, workspaceContext?.systemPrompt].filter(Boolean).join('\n\n') || undefined
-
-    if (flags['dry-run']) {
-      this.logJson({
-        args: argValues,
-        body,
-        name,
-        profile: flags.profile ?? 'default',
-        repo: flags.repo,
-        system: systemPrompt,
-        workspace: flags.workspace,
-      })
-      return
-    }
-
-    const config = await loadAgentConfig(this.config, this.log.bind(this), flags.profile)
-    if (!config) return
 
     const allowedTools = flags['allow-tools']
       ? flags['allow-tools']
