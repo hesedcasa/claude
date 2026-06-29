@@ -19,7 +19,6 @@ function makeConfig() {
 }
 
 describe('capability-commands', () => {
-
   beforeEach(async () => {
     await fs.ensureDir(testCacheDir)
   })

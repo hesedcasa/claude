@@ -117,8 +117,7 @@ export default class PromptRun extends Command {
     }
 
     // Workspace context (when present) is appended to the rendered system prompt.
-    const systemPrompt =
-      [renderedSystem, workspaceContext?.systemPrompt].filter(Boolean).join('\n\n') || undefined
+    const systemPrompt = [renderedSystem, workspaceContext?.systemPrompt].filter(Boolean).join('\n\n') || undefined
 
     const allowedTools = flags['allow-tools']
       ? flags['allow-tools']
