@@ -43,7 +43,7 @@ describe('agent:chat', () => {
     clearClientsStub = stub()
     formatAsToonStub = stub().returns('toon-output')
 
-    const imported = await esmock('../../../src/commands/claude/chat.js', {
+    const imported = await esmock('../../../src/commands/claude/index.js', {
       '../../../src/agent/agent-client.js': {chat: chatStub, clearClients: clearClientsStub},
       '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
       '../../../src/workspace-bash.js': {buildWorkspaceContext: buildWorkspaceContextStub},
