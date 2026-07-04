@@ -9,6 +9,7 @@ describe('agent-client', () => {
 
   let clearClients: any
   let askFn: any
+  let chatFn: any
   let listFn: any
   let runFn: any
   let runCommandFn: any
@@ -20,6 +21,7 @@ describe('agent-client', () => {
   beforeEach(async () => {
     mockApiInstance = {
       ask: stub().resolves(mockResult),
+      chat: stub().resolves(mockResult),
       clearClients: stub(),
       list: stub().resolves({data: {skills: ['init']}, success: true}),
       run: stub().resolves(mockResult),
@@ -35,6 +37,7 @@ describe('agent-client', () => {
 
     clearClients = mod.clearClients
     askFn = mod.ask
+    chatFn = mod.chat
     listFn = mod.list
     runFn = mod.run
     runCommandFn = mod.runCommand
@@ -73,6 +76,19 @@ describe('agent-client', () => {
       const result = await askFn(mockConfig, 'do a thing', opts)
 
       expect(mockApiInstance.ask.calledOnceWith('do a thing', opts)).to.be.true
+      expect(result).to.deep.equal(mockResult)
+    })
+  })
+
+  describe('chat', () => {
+    it('delegates to AgentApi.chat with prompts and options', async () => {
+      const stream = (async function* () {
+        yield 'hi'
+      })()
+      const opts = {allowedTools: ['Read']}
+      const result = await chatFn(mockConfig, stream, opts)
+
+      expect(mockApiInstance.chat.calledOnceWith(stream, opts)).to.be.true
       expect(result).to.deep.equal(mockResult)
     })
   })
