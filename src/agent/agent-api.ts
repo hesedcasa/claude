@@ -348,13 +348,9 @@ export class AgentApi {
   }
 
   /**
-   * Execute a slash command or skill by name.
-   *
-   * - Names starting with `/` are treated as slash commands and sent
-   *   directly as the prompt (e.g. `/help`, `/clear`, `/my-cmd args`).
-   * - Other names are treated as skills: the run is scoped to that
-   *   single skill via `options.skills`, and the user-supplied input
-   *   is forwarded to the model with a default instruction when blank.
+   * Execute a slash command or skill by name. Names starting with `/`
+   * are dispatched to `runCommand()`; everything else is treated as a
+   * skill and dispatched to `runSkill()`.
    */
   async run(name: string, input?: string, options?: AskOptions): Promise<ApiResult> {
     const trimmed = name.trim()
@@ -362,13 +358,37 @@ export class AgentApi {
       return {error: 'Name is required', success: false}
     }
 
-    if (trimmed.startsWith('/')) {
-      const prompt = input ? `${trimmed} ${input}` : trimmed
-      return this.ask(prompt, options)
+    return trimmed.startsWith('/')
+      ? this.runCommand(trimmed, input, options)
+      : this.runSkill(trimmed, input, options)
+  }
+
+  /**
+   * Execute a slash command by name. The leading `/` is optional; the
+   * command is sent directly as the prompt (e.g. `/help`, `/my-cmd args`).
+   */
+  async runCommand(name: string, input?: string, options?: AskOptions): Promise<ApiResult> {
+    const trimmed = name.trim().replace(/^\/+/, '')
+    if (!trimmed) {
+      return {error: 'Command name is required', success: false}
     }
 
-    const prompt = input || `Use the ${trimmed} skill.`
-    return this.ask(prompt, {...options, skills: [trimmed]})
+    const command = `/${trimmed}`
+    return this.ask(input ? `${command} ${input}` : command, options)
+  }
+
+  /**
+   * Execute a skill by name: the run is scoped to that single skill via
+   * `options.skills`, and the user-supplied input is forwarded to the
+   * model with a default instruction when blank.
+   */
+  async runSkill(name: string, input?: string, options?: AskOptions): Promise<ApiResult> {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      return {error: 'Skill name is required', success: false}
+    }
+
+    return this.ask(input || `Use the ${trimmed} skill.`, {...options, skills: [trimmed]})
   }
 
   /**

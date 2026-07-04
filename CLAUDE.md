@@ -35,20 +35,23 @@ npm run find-deadcode
 src/
 ├── commands/claude/       # Oclif CLI commands (user-facing)
 │   ├── ask.ts             # Send a natural-language prompt to the agent
-│   ├── list/              # List capabilities: index.ts (all) + skills, commands, tools, agents, mcp-servers
-│   ├── run.ts             # Execute a slash command or skill by name
+│   ├── list/              # List capabilities: index.ts (all) + tools, agents, mcp-servers
+│   ├── command/           # Slash commands: index.ts (list) + run.ts (execute by name, no leading / needed)
+│   ├── skill/             # Skills: index.ts (list) + run.ts (execute by name)
+│   ├── run.ts             # Execute a slash command or skill by name (dispatches on leading /)
 │   ├── auth/              # Profile management (add, delete, list, profile, test, update)
 │   ├── prompt/            # Saved prompts (add, delete/rm, edit, list, run, show)
 │   └── workspace/         # Workspace management (add, default, delete, list, update)
 ├── agent/
 │   ├── agent-api.ts       # AgentApi class wrapping claude-agent-sdk query()
-│   ├── agent-client.ts    # Singleton wrapper functions (ask, list, run, testConnection)
+│   ├── agent-client.ts    # Singleton wrapper functions (ask, list, run, runCommand, runSkill, testConnection)
 │   ├── profile-config.ts  # Profile resolution (loadAgentConfig)
 │   └── usage.ts           # formatUsageSummary helper
 ├── hooks/
 │   └── init/register-capability-commands.ts  # init hook: registers cached skills/commands as first-class commands
 ├── capability-commands.ts # Capabilities cache (capabilities.json) + dynamic oclif command factory/registration
-├── list-command.ts        # ListCommand base class shared by the list/* commands (category filter + cache refresh)
+├── list-command.ts        # ListCommand base class shared by the list-style commands (category filter + cache refresh)
+├── run-command.ts         # RunCommand base class shared by run, command run, skill run (workspace context + output)
 ├── prompts-config.ts      # Saved prompts {body (user prompt), system, description} in claude-prompts.jsonl — JSON Lines, one {name: config} object per line (name is the object key, not a field) (readPrompts, savePrompts, resolvePrompt); {{name}} templating via extractPlaceholders/renderPrompt (filled by `prompt run --arg name=value`)
 ├── workspace-config.ts    # Workspace entries {mode, repos}, path helpers (readWorkspace, etc.)
 ├── workspace-bash.ts      # Workspace context: local dirs or just-bash sandbox (git clone + virtual fs)
@@ -75,12 +78,12 @@ interface ApiResult {
 ```
 
 **3. Skills/slash commands as CLI commands (capability-commands.ts + hooks/):**
-The `init` hook exposes skills and slash commands directly as `claude <name> [input]`:
+The `init` hook exposes slash commands as `claude command <name> [input]` and skills as `claude skill <name> [input]`:
 
-- **`init` hook (hooks/init/register-capability-commands.ts):** at startup, reads the capabilities cache (`<cacheDir>/capabilities.json`, written by `claude list` via `ListCommand.refreshCapabilityCache`) and injects one dynamic oclif command per skill/slash command into the Config's internal `_commands` map (`registerCapabilityCommands`). Registered names appear in `claude help` with the same flags as `claude run`; each dynamic command forwards its raw argv to `claude run <name>` (slash commands get a `/` prefix). Existing command ids and topics are never replaced, so built-ins always win. Run `claude list` to (re)populate the cache.
+- **`init` hook (hooks/init/register-capability-commands.ts):** at startup, reads the capabilities cache (`<cacheDir>/capabilities.json`, written by `claude list` via `ListCommand.refreshCapabilityCache`) and injects one dynamic oclif command per skill/slash command into the Config's internal `_commands` map (`registerCapabilityCommands`) under its topic (`claude:command:<name>` / `claude:skill:<name>`). Registered names appear in `claude help` with the same flags as `command run`/`skill run`; each dynamic command forwards its raw argv (name without leading `/`) to `claude command run <name>` or `claude skill run <name>`. Existing command ids and topics are never replaced, so built-ins always win. Run `claude list` to (re)populate the cache.
 
 **4. AgentApi drives the SDK generator:**
-`AgentApi.ask()` iterates the `query()` async generator, collects `assistant` messages (text blocks and tool-use blocks) and the final `result` message. `AgentApi.list()` aborts after the `system/init` message to cheaply enumerate available capabilities. `AgentApi.run()` dispatches to `ask()` with either a slash-command prompt or a skills-scoped prompt.
+`AgentApi.ask()` iterates the `query()` async generator, collects `assistant` messages (text blocks and tool-use blocks) and the final `result` message. `AgentApi.list()` aborts after the `system/init` message to cheaply enumerate available capabilities. `AgentApi.runCommand()` sends a slash-command prompt and `AgentApi.runSkill()` sends a skills-scoped prompt (both via `ask()`); `AgentApi.run()` dispatches to one of them based on a leading `/`.
 
 **5. Profiles + Workspaces (profile-config.ts / workspace-config.ts):**
 Config lives at `~/.config/claude/claude-config.json`:
