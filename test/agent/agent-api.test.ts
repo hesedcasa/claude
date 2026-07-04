@@ -80,6 +80,34 @@ describe('AgentApi', () => {
       })
     })
 
+    it('passes session options to query and captures the session id from the result', async () => {
+      const queryFn = makeQueryStub([
+        // eslint-disable-next-line camelcase
+        {result: 'ok', session_id: 'sess-new', subtype: 'success', type: 'result'},
+      ])
+
+      const api = new AgentApi(config, queryFn)
+      const result = await api.ask('hi', {continueSession: true, forkSession: true, resume: 'sess-old'})
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.continue).to.be.true
+      expect(callArgs.options.forkSession).to.be.true
+      expect(callArgs.options.resume).to.equal('sess-old')
+      expect((result.data as any).sessionId).to.equal('sess-new')
+    })
+
+    it('leaves session query options unset by default', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+
+      const api = new AgentApi(config, queryFn)
+      await api.ask('hi')
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.continue === undefined).to.be.true
+      expect(callArgs.options.forkSession === undefined).to.be.true
+      expect(callArgs.options.resume === undefined).to.be.true
+    })
+
     it('exposes a workspace-bash MCP server and blocks built-in fs tools when sandboxExec is set', async () => {
       const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
       const api = new AgentApi(config, queryFn)

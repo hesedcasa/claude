@@ -201,6 +201,37 @@ describe('agent:ask', () => {
     expect(loadAgentConfigStub.firstCall.args[2]).to.equal('work')
   })
 
+  it('passes --resume and --fork-session to ask options', async () => {
+    const cmd = new AgentAsk(['hi', '--resume', 'sess-1', '--fork-session'], {
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    const opts = askStub.firstCall.args[2]
+    expect(opts.resume).to.equal('sess-1')
+    expect(opts.forkSession).to.be.true
+    expect(opts.continueSession === undefined || opts.continueSession === false).to.be.true
+  })
+
+  it('passes --continue as continueSession', async () => {
+    const cmd = new AgentAsk(['hi', '--continue'], {
+      configDir: '/tmp/test-agent-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    const opts = askStub.firstCall.args[2]
+    expect(opts.continueSession).to.be.true
+    expect(opts.resume === undefined).to.be.true
+  })
+
   it('resolves model shorthand from config.models', async () => {
     loadAgentConfigStub.resolves({
       ...mockAuth,

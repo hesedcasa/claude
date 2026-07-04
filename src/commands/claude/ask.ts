@@ -17,15 +17,27 @@ export default class AgentAsk extends Command {
     '<%= config.bin %> <%= command.id %> "List files in src" --allow-tools Read,Glob',
     '<%= config.bin %> <%= command.id %> "Summarise changes" --workspace proj01',
     '<%= config.bin %> <%= command.id %> "Review changes" --workspace proj01 --repo repo01',
+    '<%= config.bin %> <%= command.id %> "Now refactor it" --continue',
+    '<%= config.bin %> <%= command.id %> "Try another approach" --resume 4f8b6f2a-1234-4c56-8d90-abcdef012345 --fork-session',
   ]
   static override flags = {
     'allow-tools': Flags.string({
       description: 'Comma-separated list of tools the agent may use (e.g. Read,Edit,Glob)',
       required: false,
     }),
+    continue: Flags.boolean({
+      description: 'Continue the most recent session in the current directory',
+      exclusive: ['resume'],
+      required: false,
+    }),
+    'fork-session': Flags.boolean({
+      description: 'With --resume/--continue, fork into a new session instead of appending',
+      required: false,
+    }),
     model: Flags.string({char: 'm', description: 'Model to use (e.g. claude-opus-4-7)', required: false}),
     profile: Flags.string({char: 'p', description: 'Authentication profile name', required: false}),
     repo: Flags.string({description: 'Filter workspace context to this repo name', required: false}),
+    resume: Flags.string({description: 'Session ID to resume', required: false}),
     stream: Flags.boolean({description: 'Stream assistant text as it arrives', required: false}),
     system: Flags.string({description: 'Custom system prompt for the agent', required: false}),
     toon: Flags.boolean({description: 'Format output as toon', required: false}),
@@ -84,10 +96,13 @@ export default class AgentAsk extends Command {
     const result = await ask(config, args.prompt, {
       additionalDirectories: workspaceContext?.additionalDirectories,
       allowedTools,
+      continueSession: flags.continue,
       cwd: workspaceContext?.cwd ?? process.cwd(),
+      forkSession: flags['fork-session'],
       model,
       onText: flags.stream ? (text) => this.log(text) : undefined,
       onToolUse: flags.stream ? (name) => this.log(`[tool: ${name}]`) : undefined,
+      resume: flags.resume,
       sandboxExec: workspaceContext?.sandboxExec,
       sandboxFs: workspaceContext?.sandboxFs,
       systemPrompt,
