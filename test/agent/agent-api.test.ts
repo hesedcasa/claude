@@ -396,6 +396,77 @@ describe('AgentApi', () => {
     })
   })
 
+  describe('runCommand', () => {
+    it('sends the slash command as the prompt with input appended', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+
+      await api.runCommand('/review', 'this branch')
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.prompt).to.equal('/review this branch')
+      expect(callArgs.options.skills).to.be.undefined
+    })
+
+    it('prefixes the slash when the name has none', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+
+      await api.runCommand('help')
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.prompt).to.equal('/help')
+    })
+
+    it('returns error when name is blank or only slashes', async () => {
+      const queryFn = makeQueryStub([])
+      const api = new AgentApi(config, queryFn)
+
+      const blank = await api.runCommand('   ')
+      const slashesOnly = await api.runCommand('//')
+
+      expect(blank.success).to.be.false
+      expect(blank.error).to.equal('Command name is required')
+      expect(slashesOnly.success).to.be.false
+      expect(queryFn.called).to.be.false
+    })
+  })
+
+  describe('runSkill', () => {
+    it('scopes the run to the skill and forwards the input', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+
+      await api.runSkill('review', 'check this branch')
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.skills).to.deep.equal(['review'])
+      expect(callArgs.prompt).to.equal('check this branch')
+    })
+
+    it('uses a default instruction when no input is given', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+
+      await api.runSkill('review')
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.skills).to.deep.equal(['review'])
+      expect(callArgs.prompt).to.equal('Use the review skill.')
+    })
+
+    it('returns error when name is blank', async () => {
+      const queryFn = makeQueryStub([])
+      const api = new AgentApi(config, queryFn)
+
+      const result = await api.runSkill('   ')
+
+      expect(result.success).to.be.false
+      expect(result.error).to.equal('Skill name is required')
+      expect(queryFn.called).to.be.false
+    })
+  })
+
   describe('list', () => {
     it('extracts skills, commands, tools, agents, mcpServers from init message', async () => {
       const initMessage = {

@@ -6,7 +6,6 @@ import {default as path} from 'node:path'
 
 const STORE_FILE = 'capabilities.json'
 const TOPIC = 'claude'
-const RUN_COMMAND = `${TOPIC}:run`
 
 export type CapabilityKind = 'command' | 'skill'
 
@@ -40,10 +39,11 @@ export async function writeCapabilityStore(cacheDir: string, store: CapabilitySt
   await fs.outputJSON(storePath(cacheDir), store, {spaces: 2})
 }
 
-// Mirrors the `claude run` flags so `--help` on a dynamic command shows the
-// real options. Parsing/validation happens in `claude run` itself — the
-// dynamic command forwards its argv verbatim. Kept inline (instead of
-// importing run.ts) so the init hook never loads the agent SDK.
+// Mirrors the `command run` / `skill run` flags so `--help` on a dynamic
+// command shows the real options. Parsing/validation happens in the run
+// command itself — the dynamic command forwards its argv verbatim. Kept
+// inline (instead of importing run.ts) so the init hook never loads the
+// agent SDK.
 const RUN_FORWARD_FLAGS = {
   'allow-tools': Flags.string({
     description: 'Comma-separated list of tools the agent may use (e.g. Read,Edit,Glob)',
@@ -63,16 +63,21 @@ const RUN_FORWARD_FLAGS = {
 
 // ─── Dynamic command factory ──────────────────────────────────────────────────
 
+function capabilityCommandId(name: string, kind: CapabilityKind): string {
+  return `${TOPIC}:${kind}:${name}`
+}
+
 /**
- * Creates an oclif Command class for a single agent capability (skill or
- * slash command). The command forwards its raw argv to `claude run <name>`,
- * which performs the actual parsing and agent dispatch.
+ * Creates an oclif Command class for a single agent capability. Slash
+ * commands live under the `command` topic and skills under the `skill`
+ * topic; each forwards its raw argv to the topic's `run` command
+ * (`claude command run <name>` / `claude skill run <name>`), which
+ * performs the actual parsing and agent dispatch.
  */
 function createCapabilityCommand(name: string, kind: CapabilityKind): typeof Command {
-  const runName = kind === 'command' ? `/${name}` : name
-  const commandId = `${TOPIC}:${name}`
-  const description =
-    kind === 'command' ? `Run the /${name} slash command (via claude run)` : `Run the '${name}' skill (via claude run)`
+  const commandId = capabilityCommandId(name, kind)
+  const runTarget = `${TOPIC}:${kind}:run`
+  const description = kind === 'command' ? `Run the /${name} slash command` : `Run the '${name}' skill`
 
   class DynamicCapabilityCommand extends Command {
     // `name` must be set explicitly: injected commands skip oclif's cached
@@ -86,7 +91,7 @@ function createCapabilityCommand(name: string, kind: CapabilityKind): typeof Com
     static strict = false
 
     async run(): Promise<void> {
-      await this.config.runCommand(RUN_COMMAND, [runName, ...this.argv])
+      await this.config.runCommand(runTarget, [name, ...this.argv])
     }
   }
 
@@ -116,7 +121,8 @@ interface InternalConfig {
 /**
  * Reads the capabilities cache and injects one oclif command per skill and
  * slash command into the Config's internal `_commands` map, making them
- * visible in `help` and invocable directly as `claude <name> [input] [flags]`.
+ * visible in `help` and invocable as `claude command <name> [input] [flags]`
+ * (slash commands) or `claude skill <name> [input] [flags]` (skills).
  * Built-in commands and topics always win: existing ids are never replaced.
  */
 export async function registerCapabilityCommands(config: Config): Promise<void> {
@@ -133,7 +139,7 @@ export async function registerCapabilityCommands(config: Config): Promise<void> 
     const bare = name.replace(/^\//, '').trim()
     if (!bare || bare.startsWith('-')) continue
 
-    const commandId = `${TOPIC}:${bare}`
+    const commandId = capabilityCommandId(bare, kind)
     if (internal._commands.has(commandId) || internal._topics.has(commandId)) continue
 
     const CmdClass = createCapabilityCommand(bare, kind)

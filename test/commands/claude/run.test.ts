@@ -24,13 +24,17 @@ describe('agent:run', () => {
     clearClientsStub = stub()
     formatAsToonStub = stub().returns('toon-output')
 
-    const imported = await esmock('../../../src/commands/claude/run.js', {
-      '../../../src/agent/agent-client.js': {clearClients: clearClientsStub, run: runStub},
-      '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
-      '../../../src/workspace-bash.js': {buildWorkspaceContext: buildWorkspaceContextStub},
-      '../../../src/workspace-config.js': {readWorkspace: readWorkspaceStub},
-      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
-    })
+    const imported = await esmock(
+      '../../../src/commands/claude/run.js',
+      {},
+      {
+        '../../../src/agent/agent-client.js': {clearClients: clearClientsStub, run: runStub},
+        '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
+        '../../../src/workspace-bash.js': {buildWorkspaceContext: buildWorkspaceContextStub},
+        '../../../src/workspace-config.js': {readWorkspace: readWorkspaceStub},
+        '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
+      },
+    )
     AgentRun = imported.default
   })
 

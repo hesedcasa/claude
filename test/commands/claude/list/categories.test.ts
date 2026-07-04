@@ -13,11 +13,11 @@ const mockData = {
 }
 
 const CASES = [
-  {file: 'agents.js', key: 'agents'},
-  {file: 'commands.js', key: 'commands'},
-  {file: 'mcp-servers.js', key: 'mcpServers'},
-  {file: 'skills.js', key: 'skills'},
-  {file: 'tools.js', key: 'tools'},
+  {file: 'list/agents.js', key: 'agents'},
+  {file: 'command/index.js', key: 'commands'},
+  {file: 'list/mcp-servers.js', key: 'mcpServers'},
+  {file: 'skill/index.js', key: 'skills'},
+  {file: 'list/tools.js', key: 'tools'},
 ] as const
 
 for (const {file, key} of CASES) {
@@ -37,7 +37,7 @@ for (const {file, key} of CASES) {
       clearClientsStub = stub()
 
       const imported = await esmock(
-        `../../../../src/commands/claude/list/${file}`,
+        `../../../../src/commands/claude/${file}`,
         {},
         {
           '../../../../src/agent/agent-client.js': {clearClients: clearClientsStub, list: listStub},

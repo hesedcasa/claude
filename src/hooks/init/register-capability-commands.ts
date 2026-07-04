@@ -5,8 +5,9 @@ import {registerCapabilityCommands} from '../../capability-commands.js'
 /**
  * Reads the capabilities cache (written by `claude list`) at startup and
  * registers every known skill and slash command as a first-class oclif
- * command. This makes them visible in `claude help` and invocable directly
- * as `claude <name> [input]`, exactly like a built-in command.
+ * command under its topic. This makes them visible in `claude help` and
+ * invocable as `claude command <name> [input]` (slash commands) or
+ * `claude skill <name> [input]` (skills), exactly like built-in commands.
  */
 const hook: Hook<'init'> = async function (opts) {
   try {
