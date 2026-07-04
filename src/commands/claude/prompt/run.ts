@@ -1,5 +1,5 @@
 import {formatAsToon} from '@hesed/plugin-lib'
-import {Args, Command, Flags} from '@oclif/core'
+import {Args, Command, Flags, ux} from '@oclif/core'
 import {default as path} from 'node:path'
 
 import {ask, clearClients} from '../../../agent/agent-client.js'
@@ -20,6 +20,7 @@ export default class PromptRun extends Command {
     '<%= config.bin %> <%= command.id %> review --workspace proj01 --repo repo01',
     '<%= config.bin %> <%= command.id %> summarize --system "Override the saved system prompt"',
     '<%= config.bin %> <%= command.id %> classify --arg summary="..." --dry-run',
+    '<%= config.bin %> <%= command.id %> summarize --debug',
   ]
   static override flags = {
     'allow-tools': Flags.string({
@@ -32,11 +33,13 @@ export default class PromptRun extends Command {
       multiple: true,
       required: false,
     }),
+    debug: Flags.boolean({
+      description: 'Include full agent metadata (model, tools, usage) in the output; default prints the result only',
+    }),
     'dry-run': Flags.boolean({description: 'Print the resolved prompt and context without calling the agent'}),
     model: Flags.string({char: 'm', description: 'Model to use (e.g. claude-opus-4-7)', required: false}),
     profile: Flags.string({char: 'p', description: 'Authentication profile name', required: false}),
     repo: Flags.string({description: 'Filter workspace context to this repo name', required: false}),
-    stream: Flags.boolean({description: 'Stream assistant text as it arrives', required: false}),
     system: Flags.string({description: "Override the prompt's saved system prompt", required: false}),
     toon: Flags.boolean({description: 'Format output as toon', required: false}),
     workspace: Flags.string({
@@ -130,23 +133,42 @@ export default class PromptRun extends Command {
       ? (config.models?.[flags.model as 'haiku' | 'opus' | 'sonnet'] ?? flags.model)
       : config.models?.sonnet
 
-    const result = await ask(config, body, {
-      additionalDirectories: workspaceContext?.additionalDirectories,
-      allowedTools,
-      cwd: workspaceContext?.cwd ?? process.cwd(),
-      model,
-      onText: flags.stream ? (text) => this.log(text) : undefined,
-      onToolUse: flags.stream ? (toolName) => this.log(`[tool: ${toolName}]`) : undefined,
-      sandboxExec: workspaceContext?.sandboxExec,
-      sandboxFs: workspaceContext?.sandboxFs,
-      systemPrompt,
-    })
+    // Spinner only when stderr is a TTY, so piped output stays clean.
+    const showSpinner = Boolean(process.stderr.isTTY)
+    if (showSpinner) ux.action.start(`Running '${name}'`)
+
+    let result
+    try {
+      result = await ask(config, body, {
+        additionalDirectories: workspaceContext?.additionalDirectories,
+        allowedTools,
+        cwd: workspaceContext?.cwd ?? process.cwd(),
+        model,
+        sandboxExec: workspaceContext?.sandboxExec,
+        sandboxFs: workspaceContext?.sandboxFs,
+        systemPrompt,
+      })
+    } finally {
+      if (showSpinner) ux.action.stop()
+    }
+
     clearClients()
 
+    // Default shows the agent's result only; --debug includes the surrounding metadata.
+    // --toon formats whichever payload is selected.
+    if (!result.success && !flags.debug) {
+      this.error(typeof result.error === 'string' ? result.error : JSON.stringify(result.error))
+    }
+
+    const data = result.data as undefined | {result?: unknown}
+    const payload = flags.debug ? result : (data?.result ?? result.data ?? {})
+
     if (flags.toon) {
-      this.log(formatAsToon(result))
+      this.log(formatAsToon(payload))
+    } else if (typeof payload === 'string') {
+      this.log(payload)
     } else {
-      this.logJson(result)
+      this.logJson(payload)
     }
   }
 }

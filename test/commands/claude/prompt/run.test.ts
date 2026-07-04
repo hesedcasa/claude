@@ -252,7 +252,36 @@ describe('agent:prompt:run', () => {
     expect(askStub.called).to.be.false
   })
 
-  it('outputs TOON format when --toon is used', async () => {
+  it('prints the result only (no metadata) by default', async () => {
+    const cmd = new PromptRun(['summarize'], {
+      configDir: '/tmp/test-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    const logStub = stub(cmd, 'log')
+    const logJsonStub = stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    expect(logStub.calledWith('done')).to.be.true
+    expect(logJsonStub.called).to.be.false
+  })
+
+  it('includes full metadata via logJson when --debug is used', async () => {
+    const cmd = new PromptRun(['summarize', '--debug'], {
+      configDir: '/tmp/test-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    const logJsonStub = stub(cmd, 'logJson')
+
+    await cmd.run()
+
+    expect(logJsonStub.calledOnce).to.be.true
+    expect(logJsonStub.firstCall.args[0]).to.deep.equal(mockResult)
+  })
+
+  it('outputs TOON format of the result only when --toon is used without --debug', async () => {
     const cmd = new PromptRun(['summarize', '--toon'], {
       configDir: '/tmp/test-config',
       root: process.cwd(),
@@ -263,6 +292,22 @@ describe('agent:prompt:run', () => {
     await cmd.run()
 
     expect(formatAsToonStub.calledOnce).to.be.true
+    expect(formatAsToonStub.firstCall.args[0]).to.equal('done')
+    expect(logStub.calledWith('toon-output')).to.be.true
+  })
+
+  it('outputs TOON format of the full result when --toon and --debug are used', async () => {
+    const cmd = new PromptRun(['summarize', '--toon', '--debug'], {
+      configDir: '/tmp/test-config',
+      root: process.cwd(),
+      runHook: stub().resolves({failures: [], successes: []}),
+    } as any)
+    const logStub = stub(cmd, 'log')
+
+    await cmd.run()
+
+    expect(formatAsToonStub.calledOnce).to.be.true
+    expect(formatAsToonStub.firstCall.args[0]).to.deep.equal(mockResult)
     expect(logStub.calledWith('toon-output')).to.be.true
   })
 })
