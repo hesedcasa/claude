@@ -15,7 +15,7 @@ describe('agent:prompt:list', () => {
     })
     formatAsToonStub = stub().returns('toon-output')
 
-    const imported = await esmock('../../../../src/commands/claude/prompt/list.js', {
+    const imported = await esmock('../../../../src/commands/claude/prompt/index.js', {
       '../../../../src/prompts-config.js': {readPrompts: readPromptsStub},
       '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })

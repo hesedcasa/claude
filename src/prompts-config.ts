@@ -1,4 +1,3 @@
-import {createProfileManager, type Profiles} from '@hesed/plugin-lib'
 import {type Config} from '@oclif/core'
 import {default as fs} from 'fs-extra'
 import {default as path} from 'node:path'
@@ -12,37 +11,48 @@ export interface PromptConfig {
   system?: string
 }
 
-export type Prompts = Profiles<PromptConfig>
-
-/** Prompts persist in their own plugin-lib store, keyed by name. */
-export const PROMPTS_FILE = 'claude-prompts.json'
-
-function manager(config: Config) {
-  return createProfileManager<PromptConfig>(config, undefined, PROMPTS_FILE)
-}
+/** Prompts keyed by name. */
+export type Prompts = Record<string, PromptConfig>
 
 /**
- * Read every saved prompt. plugin-lib's `readProfiles` throws when the store
- * file does not exist yet; treat only that case as an empty collection. Any
- * other failure (e.g. malformed JSON) is rethrown so a subsequent save can't
- * silently overwrite an unreadable store and lose existing prompts.
+ * Prompts persist as JSON Lines: one `{name: PromptConfig}` object per line. The
+ * name is the object key rather than a field, so it appears once. The
+ * line-oriented format keeps diffs to a single line per prompt and lets the
+ * store be appended to or grepped without parsing the whole file.
+ */
+export const PROMPTS_FILE = 'claude-prompts.jsonl'
+
+/**
+ * Read every saved prompt. A missing store is an empty collection; any other
+ * failure (a malformed line, an unreadable file) is rethrown so a subsequent
+ * save can't silently overwrite an unreadable store and lose existing prompts.
  */
 export async function readPrompts(config: Config): Promise<Prompts> {
+  let contents: string
   try {
-    return await manager(config).readProfiles()
+    contents = await fs.readFile(path.join(config.configDir, PROMPTS_FILE), 'utf8')
   } catch (error) {
-    try {
-      await fs.access(path.join(config.configDir, PROMPTS_FILE))
-    } catch {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return {}
     }
 
     throw error
   }
+
+  const prompts: Prompts = {}
+  for (const line of contents.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    Object.assign(prompts, JSON.parse(trimmed) as Prompts)
+  }
+
+  return prompts
 }
 
 export async function savePrompts(config: Config, prompts: Prompts): Promise<void> {
-  await manager(config).saveProfiles(prompts)
+  const lines = Object.entries(prompts).map(([name, prompt]) => JSON.stringify({[name]: prompt}))
+  const contents = lines.length > 0 ? lines.join('\n') + '\n' : ''
+  await fs.outputFile(path.join(config.configDir, PROMPTS_FILE), contents)
 }
 
 export function resolvePrompt(prompts: Prompts, name: string): [string, PromptConfig] {

@@ -40,6 +40,26 @@ describe('prompts-config', () => {
       expect(result).to.deep.equal({})
     })
 
+    it('writes one {name: config} object per line', async () => {
+      await savePrompts(config, {
+        review: {body: 'Review it'},
+        summarize: {body: 'Summarize it', description: 'Summary'},
+      })
+
+      const contents = await fs.readFile(testConfigPath, 'utf8')
+      const lines = contents.trimEnd().split('\n')
+
+      expect(lines).to.have.lengthOf(2)
+      expect(JSON.parse(lines[0])).to.deep.equal({review: {body: 'Review it'}})
+      expect(JSON.parse(lines[1])).to.deep.equal({summarize: {body: 'Summarize it', description: 'Summary'}})
+    })
+
+    it('writes an empty file when there are no prompts', async () => {
+      await savePrompts(config, {})
+
+      expect(await fs.readFile(testConfigPath, 'utf8')).to.equal('')
+    })
+
     it('rethrows instead of losing data when the store is malformed', async () => {
       await fs.writeFile(testConfigPath, '{not valid json')
 

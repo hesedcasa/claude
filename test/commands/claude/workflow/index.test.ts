@@ -10,7 +10,7 @@ describe('agent:workflow:list', () => {
   beforeEach(async () => {
     readWorkflowsStub = stub()
 
-    const imported = await esmock('../../../../src/commands/claude/workflow/list.js', {
+    const imported = await esmock('../../../../src/commands/claude/workflow/index.js', {
       '../../../../src/workflow-config.js': {readWorkflows: readWorkflowsStub},
     })
     AgentWorkflowList = imported.default

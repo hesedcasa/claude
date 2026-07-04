@@ -49,7 +49,7 @@ src/
 │   └── init/register-capability-commands.ts  # init hook: registers cached skills/commands as first-class commands
 ├── capability-commands.ts # Capabilities cache (capabilities.json) + dynamic oclif command factory/registration
 ├── list-command.ts        # ListCommand base class shared by the list/* commands (category filter + cache refresh)
-├── prompts-config.ts      # Saved prompts {body (user prompt), system, description} in claude-prompts.json (readPrompts, savePrompts, resolvePrompt); {{name}} templating via extractPlaceholders/renderPrompt (filled by `prompt run --arg name=value`)
+├── prompts-config.ts      # Saved prompts {body (user prompt), system, description} in claude-prompts.jsonl — JSON Lines, one {name: config} object per line (name is the object key, not a field) (readPrompts, savePrompts, resolvePrompt); {{name}} templating via extractPlaceholders/renderPrompt (filled by `prompt run --arg name=value`)
 ├── workspace-config.ts    # Workspace entries {mode, repos}, path helpers (readWorkspace, etc.)
 ├── workspace-bash.ts      # Workspace context: local dirs or just-bash sandbox (git clone + virtual fs)
 └── format.ts              # TOON output formatting
