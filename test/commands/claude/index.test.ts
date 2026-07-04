@@ -98,6 +98,13 @@ describe('agent:chat', () => {
     expect(logJsonStub.firstCall.args[0]).to.deep.equal(mockResult)
   })
 
+  it('opts the prompt arg out of oclif stdin reading so piped lines reach the chat loop', () => {
+    // Without ignoreStdin the oclif parser drains piped stdin into the
+    // arg, so multi-line pipes collapse into one giant first turn and
+    // the interactive loop hangs on the already-consumed stream.
+    expect(AgentChat.args.prompt.ignoreStdin).to.be.true
+  })
+
   it('keeps the session alive across turns until an exit command', async () => {
     const cmd = makeCommand(['first question'])
     const readLineStub = stub(cmd, 'readLine')

@@ -15,7 +15,9 @@ const EXIT_COMMANDS = new Set(['/exit', '/quit', 'exit', 'quit'])
 
 export default class AgentChat extends Command {
   static override args = {
-    prompt: Args.string({description: 'Optional first message to send', required: false}),
+    // ignoreStdin stops the oclif parser from draining piped stdin into
+    // this arg; piped lines must reach the chat loop as individual turns.
+    prompt: Args.string({description: 'Optional first message to send', ignoreStdin: true, required: false}),
   }
   static override description =
     'Chat with the Claude agent in a persistent interactive session (streaming input mode)'
@@ -53,8 +55,10 @@ export default class AgentChat extends Command {
     }),
   }
   private finished = false
-  private stdinLines?: AsyncIterator<string>
+  private stdinEnded = false
+  private stdinQueue: string[] = []
   private stdinReader?: Interface
+  private stdinWaiter?: () => void
   private turnDone?: () => void
 
   // eslint-disable-next-line complexity
@@ -132,6 +136,28 @@ export default class AgentChat extends Command {
   }
 
   /**
+   * Buffer piped stdin lines in an owned queue. Node's readline async
+   * iterator discards lines still queued when the stream closes, which
+   * loses input whenever a line arrives while a turn is in flight, so
+   * the events are consumed directly instead.
+   */
+  private ensureStdinReader(): void {
+    if (this.stdinReader) return
+
+    this.stdinReader = createInterface({input: process.stdin})
+    this.stdinReader.on('line', (line) => {
+      this.stdinQueue.push(line)
+      this.stdinWaiter?.()
+      this.stdinWaiter = undefined
+    })
+    this.stdinReader.on('close', () => {
+      this.stdinEnded = true
+      this.stdinWaiter?.()
+      this.stdinWaiter = undefined
+    })
+  }
+
+  /**
    * Print the per-turn summary and resume the prompt generator so the
    * next user message is only requested after the turn has completed.
    */
@@ -188,13 +214,21 @@ export default class AgentChat extends Command {
       }
     }
 
-    if (!this.stdinLines) {
-      this.stdinReader = createInterface({input: process.stdin})
-      this.stdinLines = this.stdinReader[Symbol.asyncIterator]()
+    // A readline attached after stdin already ended (e.g. a flag consumed
+    // the piped input first) never emits anything, so bail out up front.
+    if (process.stdin.readableEnded && this.stdinQueue.length === 0) return undefined
+
+    this.ensureStdinReader()
+
+    while (this.stdinQueue.length === 0) {
+      if (this.stdinEnded) return undefined
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise<void>((resolve) => {
+        this.stdinWaiter = resolve
+      })
     }
 
-    const next = await this.stdinLines.next()
-    return next.done ? undefined : next.value
+    return this.stdinQueue.shift()
   }
 
   private waitForTurn(): Promise<void> {
