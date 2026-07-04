@@ -29,10 +29,13 @@ export type SandboxExecFn = (command: string) => Promise<{exitCode: number; stde
 export interface AskOptions {
   additionalDirectories?: string[]
   allowedTools?: string[]
+  continueSession?: boolean
   cwd?: string
+  forkSession?: boolean
   model?: string
   onText?: (text: string) => void
   onToolUse?: (toolName: string) => void
+  resume?: string
   sandboxExec?: SandboxExecFn
   sandboxFs?: SandboxFs
   skills?: 'all' | string[]
@@ -50,6 +53,7 @@ export interface UsageSummary {
 interface AskResult {
   model?: string
   result: string
+  sessionId?: string
   toolsUsed: string[]
   usage?: UsageSummary
 }
@@ -245,12 +249,15 @@ export class AgentApi {
         options: {
           additionalDirectories: options?.additionalDirectories,
           allowedTools: toolOptions.allowedTools,
+          continue: options?.continueSession,
           cwd: options?.cwd,
           disallowedTools: toolOptions.disallowedTools,
           env: this.buildEnv(),
+          forkSession: options?.forkSession,
           mcpServers: toolOptions.mcpServers,
           model: options?.model ?? this.config.models?.sonnet,
           permissionMode: 'bypassPermissions',
+          resume: options?.resume,
           skills: options?.skills,
           systemPrompt: options?.systemPrompt,
         },
@@ -260,6 +267,7 @@ export class AgentApi {
       const toolsUsed: string[] = []
       let finalText = ''
       let model: string | undefined
+      let sessionId: string | undefined
       let usage: undefined | UsageSummary
       let errorSubtype: string | undefined
       let resultSeen = false
@@ -269,6 +277,7 @@ export class AgentApi {
           this.handleAssistantMessage(message, toolsUsed, options)
         } else if (message.type === 'result') {
           resultSeen = true
+          sessionId = message.session_id
           if (message.subtype === 'success') {
             finalText = message.result
             model = Object.keys(message.modelUsage ?? {})[0]
@@ -287,7 +296,7 @@ export class AgentApi {
         return {error: 'Agent run completed without a result message', success: false}
       }
 
-      return {data: {model, result: finalText, toolsUsed, usage} satisfies AskResult, success: true}
+      return {data: {model, result: finalText, sessionId, toolsUsed, usage} satisfies AskResult, success: true}
     } catch (error: unknown) {
       return {error: error instanceof Error ? error.message : String(error), success: false}
     }

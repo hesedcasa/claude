@@ -39,11 +39,13 @@ src/
 │   ├── run.ts             # Execute a slash command or skill by name
 │   ├── auth/              # Profile management (add, delete, list, profile, test, update)
 │   ├── prompt/            # Saved prompts (add, delete/rm, edit, list, run, show)
+│   ├── session/           # Session management (index=list, show, delete, rename, tag, fork, resume)
 │   └── workspace/         # Workspace management (add, default, delete, list, update)
 ├── agent/
 │   ├── agent-api.ts       # AgentApi class wrapping claude-agent-sdk query()
 │   ├── agent-client.ts    # Singleton wrapper functions (ask, list, run, testConnection)
 │   ├── profile-config.ts  # Profile resolution (loadAgentConfig)
+│   ├── session-api.ts     # ApiResult wrappers over the SDK session fns (listSessions, getSessionInfo/Messages, deleteSession, renameSession, tagSession, forkSession)
 │   └── usage.ts           # formatUsageSummary helper
 ├── hooks/
 │   └── init/register-capability-commands.ts  # init hook: registers cached skills/commands as first-class commands
@@ -110,6 +112,10 @@ Config lives at `~/.config/claude/claude-config.json`:
 
 - **`local` mode** — repo paths are real directories: `ask`/`run` build a system prompt listing them, set `cwd` to the common parent (`commonParentDir`), and pass `additionalDirectories` to the SDK. Git URLs are skipped with a hint.
 - **`sandbox` mode** — repos are mounted copy-on-write (just-bash `OverlayFs` under `MountableFs`) at `/workspace/<repoName>` in an in-memory virtual filesystem; git URLs are shallow-cloned into `<dataDir>/workspace-repos` first (`syncGitRepo`). The returned `sandboxExec` is passed to `AgentApi.ask()`, which exposes it as an in-process MCP `bash` tool (`mcp__workspace-bash__bash` via `createSdkMcpServer`) and disallows the built-in `Bash`/`Edit`/`Glob`/`Grep`/`Read`/`Write` tools, so all agent file/shell operations stay inside the sandbox and never touch the real filesystem.
+
+**7. Sessions (session-api.ts + commands/claude/session/):**
+
+The SDK persists every `query()` run as a session transcript under `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`. `AgentApi.ask()` accepts `resume` (session ID), `continueSession`, and `forkSession` options (mapped to the SDK's `resume`/`continue`/`forkSession` query options) and reports the run's `session_id` back as `sessionId` in `AskResult`, so any `ask`/`run` output contains the ID needed to return to that conversation. `ask` exposes these as `--resume <id>`, `--continue`, and `--fork-session`; `session resume <id> <prompt>` resumes through the same `ask()` path (with `--fork` to branch instead of appending). The remaining `session` commands (`session` = list, `show`, `delete`, `rename`, `tag`, `fork`) operate on transcripts directly via the SDK session functions wrapped in `session-api.ts` — no agent run and no profile/API key required. `session` (list) defaults to the current directory's project; pass `--all` for every project.
 
 ## Adding a New Command
 
