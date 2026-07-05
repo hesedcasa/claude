@@ -8,7 +8,6 @@ describe('agent:command:run', () => {
   let loadAgentConfigStub: SinonStub
   let runCommandStub: SinonStub
   let clearClientsStub: SinonStub
-  let formatAsToonStub: SinonStub
 
   const mockAuth = {apiKey: 'sk-ant-test', apiUrl: 'https://api.anthropic.com'}
   const mockResult = {data: {result: 'done', toolsUsed: []}, success: true}
@@ -23,7 +22,6 @@ describe('agent:command:run', () => {
     loadAgentConfigStub = stub().resolves(mockAuth)
     runCommandStub = stub().resolves(mockResult)
     clearClientsStub = stub()
-    formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock(
       '../../../../src/commands/claude/command/run.js',
@@ -32,14 +30,13 @@ describe('agent:command:run', () => {
         '../../../../src/agent/agent-client.js': {clearClients: clearClientsStub, runCommand: runCommandStub},
         '../../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
         '../../../../src/workspace-config.js': {readWorkspace: stub().resolves()},
-        '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
       },
     )
     CommandRun = imported.default
   })
 
-  it('forwards the command name and input to runCommand and outputs JSON', async () => {
-    const cmd = new CommandRun(['review', 'this branch'], commandOptions as any)
+  it('forwards the command name and input to runCommand and outputs JSON with --json', async () => {
+    const cmd = new CommandRun(['review', 'this branch', '--json'], commandOptions as any)
     const logJsonStub = stub(cmd, 'logJson')
 
     await cmd.run()
@@ -73,15 +70,5 @@ describe('agent:command:run', () => {
     expect(runCommandStub.called).to.be.false
     expect(clearClientsStub.called).to.be.false
     expect(logJsonStub.called).to.be.false
-  })
-
-  it('outputs TOON format when --toon is used', async () => {
-    const cmd = new CommandRun(['help', '--toon'], commandOptions as any)
-    const logStub = stub(cmd, 'log')
-
-    await cmd.run()
-
-    expect(formatAsToonStub.calledOnce).to.be.true
-    expect(logStub.calledWith('toon-output')).to.be.true
   })
 })

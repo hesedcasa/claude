@@ -28,12 +28,32 @@ describe('capability-commands', () => {
   })
 
   describe('capability store', () => {
-    it('round-trips skills and commands through the cache file', async () => {
-      const store = {commands: ['help', 'clear'], skills: ['review', 'commit']}
+    it('round-trips entries with metadata through the cache file', async () => {
+      const store = {
+        commands: [{argumentHint: '[message]', description: 'Create a git commit', name: 'commit'}],
+        skills: [{description: 'Review a pull request', name: 'review'}],
+      }
       await writeCapabilityStore(testCacheDir, store)
 
       const result = await readCapabilityStore(testCacheDir)
       expect(result).to.deep.equal(store)
+    })
+
+    it('normalizes plain names to entries without metadata', async () => {
+      await writeCapabilityStore(testCacheDir, {commands: ['help'], skills: ['review']})
+
+      const result = await readCapabilityStore(testCacheDir)
+      expect(result).to.deep.equal({commands: [{name: 'help'}], skills: [{name: 'review'}]})
+    })
+
+    it('reads legacy caches that contain plain name arrays', async () => {
+      await fs.writeJSON(testStorePath, {commands: ['help', 'clear'], skills: ['review']})
+
+      const result = await readCapabilityStore(testCacheDir)
+      expect(result).to.deep.equal({
+        commands: [{name: 'help'}, {name: 'clear'}],
+        skills: [{name: 'review'}],
+      })
     })
 
     it('returns undefined when the cache file is missing', async () => {
@@ -41,11 +61,11 @@ describe('capability-commands', () => {
       expect(result).to.be.undefined
     })
 
-    it('drops non-string entries and tolerates missing keys', async () => {
-      await fs.writeJSON(testStorePath, {commands: ['help', 42, null]})
+    it('drops invalid entries and tolerates missing keys', async () => {
+      await fs.writeJSON(testStorePath, {commands: ['help', 42, null, {description: 'no name'}, {name: 'ok'}]})
 
       const result = await readCapabilityStore(testCacheDir)
-      expect(result).to.deep.equal({commands: ['help'], skills: []})
+      expect(result).to.deep.equal({commands: [{name: 'help'}, {name: 'ok'}], skills: []})
     })
   })
 
@@ -67,6 +87,33 @@ describe('capability-commands', () => {
       expect(entry.description).to.include('review')
     })
 
+    it('uses the frontmatter description and argument hint when present', async () => {
+      await writeCapabilityStore(testCacheDir, {
+        commands: [{argumentHint: '[message]', description: 'Create a git commit', name: 'commit'}],
+        skills: [{description: 'Review a pull request', name: 'review'}],
+      })
+
+      const config = makeConfig()
+      await registerCapabilityCommands(config as any)
+
+      expect(config._commands.get('claude:command:commit').description).to.equal('Create a git commit')
+      expect(config._commands.get('claude:skill:review').description).to.equal('Review a pull request')
+
+      const CmdClass = await config._commands.get('claude:command:commit').load()
+      expect((CmdClass as any).args.input.description).to.equal('[message]')
+    })
+
+    it('falls back to generic help text when metadata is missing', async () => {
+      await writeCapabilityStore(testCacheDir, {commands: [{name: 'compact'}], skills: []})
+
+      const config = makeConfig()
+      await registerCapabilityCommands(config as any)
+
+      expect(config._commands.get('claude:command:compact').description).to.equal('Run the /compact slash command')
+      const CmdClass = await config._commands.get('claude:command:compact').load()
+      expect((CmdClass as any).args.input.description).to.equal('Additional input to forward to the agent')
+    })
+
     it('does nothing when the cache is missing', async () => {
       const config = makeConfig()
       await registerCapabilityCommands(config as any)
@@ -86,6 +133,55 @@ describe('capability-commands', () => {
 
       expect(config._commands.get('claude:command:run')).to.equal(builtIn)
       expect(config._commands.has('claude:skill:auth')).to.be.false
+    })
+
+    it('registers intermediate topics for namespaced capabilities', async () => {
+      await writeCapabilityStore(testCacheDir, {
+        commands: ['dev-kit:misc:generate-rules'],
+        skills: ['sentry:sentry-go-sdk'],
+      })
+
+      const config = makeConfig()
+      await registerCapabilityCommands(config as any)
+
+      expect([...config._commands.keys()]).to.have.members([
+        'claude:skill:sentry:sentry-go-sdk',
+        'claude:command:dev-kit:misc:generate-rules',
+      ])
+      // Leaf topics mirror oclif's own loadTopics: help only displays a
+      // topic that has a child topic, so the leaf makes its namespace visible.
+      expect([...config._topics.keys()]).to.have.members([
+        'claude:skill:sentry',
+        'claude:skill:sentry:sentry-go-sdk',
+        'claude:command:dev-kit',
+        'claude:command:dev-kit:misc',
+        'claude:command:dev-kit:misc:generate-rules',
+      ])
+      expect(config._topics.get('claude:skill:sentry').description).to.include('sentry')
+      expect(config._topics.get('claude:command:dev-kit:misc').description).to.include('dev-kit:misc')
+    })
+
+    it('does not overwrite an existing topic with the same name', async () => {
+      await writeCapabilityStore(testCacheDir, {commands: [], skills: ['sentry:sentry-go-sdk']})
+
+      const config = makeConfig()
+      const existing = {description: 'built-in', name: 'claude:skill:sentry'}
+      config._topics.set('claude:skill:sentry', existing)
+
+      await registerCapabilityCommands(config as any)
+
+      expect(config._topics.get('claude:skill:sentry')).to.equal(existing)
+    })
+
+    it('still registers a plain capability whose name matches a namespace', async () => {
+      await writeCapabilityStore(testCacheDir, {commands: [], skills: ['sentry:sentry-go-sdk', 'sentry']})
+
+      const config = makeConfig()
+      await registerCapabilityCommands(config as any)
+
+      expect(config._commands.has('claude:skill:sentry')).to.be.true
+      expect(config._commands.has('claude:skill:sentry:sentry-go-sdk')).to.be.true
+      expect(config._topics.has('claude:skill:sentry')).to.be.true
     })
 
     it('forwards argv to claude:skill:run with the skill name', async () => {

@@ -16,7 +16,7 @@ export default class AgentRun extends RunCommand {
   static override examples = [
     '<%= config.bin %> <%= command.id %> /help',
     '<%= config.bin %> <%= command.id %> review "this branch"',
-    '<%= config.bin %> <%= command.id %> /clear --stream',
+    '<%= config.bin %> <%= command.id %> /clear --json',
     '<%= config.bin %> <%= command.id %> review "this repo" --workspace proj01',
   ]
   static override flags = {}

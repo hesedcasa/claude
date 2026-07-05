@@ -11,15 +11,12 @@ const resolvePrompt = (prompts: Record<string, any>, name: string): [string, any
 describe('agent:prompt:show', () => {
   let PromptShow: any
   let readPromptsStub: SinonStub
-  let formatAsToonStub: SinonStub
 
   beforeEach(async () => {
     readPromptsStub = stub().resolves({summarize: {body: 'Summarize it', description: 'Summary'}})
-    formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock('../../../../src/commands/claude/prompt/show.js', {
       '../../../../src/prompts-config.js': {readPrompts: readPromptsStub, resolvePrompt},
-      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     PromptShow = imported.default
   })
@@ -54,19 +51,5 @@ describe('agent:prompt:show', () => {
     await cmd.run()
 
     expect(logJsonStub.firstCall.args[0].placeholders).to.have.members(['summary', 'description'])
-  })
-
-  it('formats as TOON when --toon is set', async () => {
-    const cmd = new PromptShow(['summarize', '--toon'], {
-      configDir: '/tmp/test-config',
-      root: process.cwd(),
-      runHook: stub().resolves({failures: [], successes: []}),
-    } as any)
-    const logStub = stub(cmd, 'log')
-
-    await cmd.run()
-
-    expect(formatAsToonStub.calledOnce).to.be.true
-    expect(logStub.calledWith('toon-output')).to.be.true
   })
 })

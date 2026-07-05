@@ -8,7 +8,6 @@ describe('agent:skill:run', () => {
   let loadAgentConfigStub: SinonStub
   let runSkillStub: SinonStub
   let clearClientsStub: SinonStub
-  let formatAsToonStub: SinonStub
 
   const mockAuth = {apiKey: 'sk-ant-test', apiUrl: 'https://api.anthropic.com'}
   const mockResult = {data: {result: 'done', toolsUsed: []}, success: true}
@@ -23,7 +22,6 @@ describe('agent:skill:run', () => {
     loadAgentConfigStub = stub().resolves(mockAuth)
     runSkillStub = stub().resolves(mockResult)
     clearClientsStub = stub()
-    formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock(
       '../../../../src/commands/claude/skill/run.js',
@@ -32,14 +30,13 @@ describe('agent:skill:run', () => {
         '../../../../src/agent/agent-client.js': {clearClients: clearClientsStub, runSkill: runSkillStub},
         '../../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
         '../../../../src/workspace-config.js': {readWorkspace: stub().resolves()},
-        '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
       },
     )
     SkillRun = imported.default
   })
 
-  it('forwards the skill name and input to runSkill and outputs JSON', async () => {
-    const cmd = new SkillRun(['review', 'check this branch'], commandOptions as any)
+  it('forwards the skill name and input to runSkill and outputs JSON with --json', async () => {
+    const cmd = new SkillRun(['review', 'check this branch', '--json'], commandOptions as any)
     const logJsonStub = stub(cmd, 'logJson')
 
     await cmd.run()
@@ -73,15 +70,5 @@ describe('agent:skill:run', () => {
     expect(runSkillStub.called).to.be.false
     expect(clearClientsStub.called).to.be.false
     expect(logJsonStub.called).to.be.false
-  })
-
-  it('outputs TOON format when --toon is used', async () => {
-    const cmd = new SkillRun(['review', '--toon'], commandOptions as any)
-    const logStub = stub(cmd, 'log')
-
-    await cmd.run()
-
-    expect(formatAsToonStub.calledOnce).to.be.true
-    expect(logStub.calledWith('toon-output')).to.be.true
   })
 })

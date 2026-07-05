@@ -13,14 +13,27 @@ const mockData = {
 }
 
 const CASES = [
-  {file: 'list/agents.js', key: 'agents'},
-  {file: 'command/index.js', key: 'commands'},
-  {file: 'list/mcp-servers.js', key: 'mcpServers'},
-  {file: 'skill/index.js', key: 'skills'},
-  {file: 'list/tools.js', key: 'tools'},
+  {
+    entries: ['code-reviewer'],
+    file: 'list/agents.js',
+    key: 'agents',
+    lines: ['code-reviewer'],
+  },
+  {
+    entries: ['github'],
+    file: 'list/mcp-servers.js',
+    key: 'mcpServers',
+    lines: ['github'],
+  },
+  {
+    entries: ['Read', 'Edit'],
+    file: 'list/tools.js',
+    key: 'tools',
+    lines: ['Read', 'Edit'],
+  },
 ] as const
 
-for (const {file, key} of CASES) {
+for (const {entries, file, key, lines} of CASES) {
   describe(`agent:list:${key}`, () => {
     let CommandClass: any
     let listStub: SinonStub
@@ -43,32 +56,49 @@ for (const {file, key} of CASES) {
           '../../../../src/agent/agent-client.js': {clearClients: clearClientsStub, list: listStub},
           '../../../../src/agent/profile-config.js': {loadAgentConfig: stub().resolves(mockAuth)},
           '../../../../src/capability-commands.js': {writeCapabilityStore: stub().resolves()},
+          '../../../../src/capability-metadata.js': {
+            resolveCapabilityEntries: stub().resolves({
+              commands: mockData.commands.map((name) => ({name})),
+              skills: mockData.skills.map((name) => ({name})),
+            }),
+          },
           '../../../../src/workspace-config.js': {readWorkspace: stub().resolves()},
         },
       )
       CommandClass = imported.default
     })
 
-    it(`outputs only ${key}`, async () => {
-      const cmd = new CommandClass([], commandOptions as any)
+    it(`outputs only ${key} as JSON with --json`, async () => {
+      const cmd = new CommandClass(['--json'], commandOptions as any)
       const logJsonStub = stub(cmd, 'logJson')
 
       await cmd.run()
 
       expect(listStub.calledOnce).to.be.true
       expect(clearClientsStub.calledOnce).to.be.true
-      expect(logJsonStub.firstCall.args[0]).to.deep.equal({data: {[key]: mockData[key]}, success: true})
+      expect(logJsonStub.firstCall.args[0]).to.deep.equal(entries)
     })
 
-    it('returns the full result when unsuccessful', async () => {
-      listStub.resolves({error: 'boom', success: false})
-
+    it(`prints only ${key} as text by default`, async () => {
       const cmd = new CommandClass([], commandOptions as any)
-      const logJsonStub = stub(cmd, 'logJson')
+      const logStub = stub(cmd, 'log')
+      stub(cmd, 'logJson')
 
       await cmd.run()
 
-      expect(logJsonStub.firstCall.args[0]).to.deep.equal({error: 'boom', success: false})
+      expect(logStub.getCalls().map((call) => call.args[0])).to.deep.equal(lines)
+    })
+
+    it('prints the error message when unsuccessful', async () => {
+      listStub.resolves({error: 'boom', success: false})
+
+      const cmd = new CommandClass([], commandOptions as any)
+      const logStub = stub(cmd, 'log')
+      stub(cmd, 'logJson')
+
+      await cmd.run()
+
+      expect(logStub.calledWith('Error: boom')).to.be.true
     })
   })
 }

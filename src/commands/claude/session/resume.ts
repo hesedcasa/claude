@@ -1,4 +1,3 @@
-import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags} from '@oclif/core'
 
 import {ask, clearClients} from '../../../agent/agent-client.js'
@@ -28,7 +27,6 @@ export default class SessionResume extends Command {
     model: Flags.string({char: 'm', description: 'Model to use (e.g. claude-opus-4-7)', required: false}),
     profile: Flags.string({char: 'p', description: 'Authentication profile name', required: false}),
     stream: Flags.boolean({description: 'Stream assistant text as it arrives', required: false}),
-    toon: Flags.boolean({description: 'Format output as toon', required: false}),
   }
 
   public async run(): Promise<void> {
@@ -58,10 +56,6 @@ export default class SessionResume extends Command {
     })
     clearClients()
 
-    if (flags.toon) {
-      this.log(formatAsToon(result))
-    } else {
-      this.logJson(result)
-    }
+    this.logJson(result)
   }
 }

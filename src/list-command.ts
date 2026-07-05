@@ -1,24 +1,35 @@
-import {formatAsToon} from '@hesed/plugin-lib'
-import {Command, Flags} from '@oclif/core'
+import {Command, Flags, ux} from '@oclif/core'
+
+import type {ApiResult, CapabilityDetail} from './agent/agent-api.js'
+import type {CapabilityEntry} from './capability-commands.js'
 
 import {clearClients, list} from './agent/agent-client.js'
 import {loadAgentConfig} from './agent/profile-config.js'
 import {writeCapabilityStore} from './capability-commands.js'
+import {resolveCapabilityEntries} from './capability-metadata.js'
 import {isGitUrl} from './workspace-bash.js'
 import {commonParentDir, expandPath, getDefaultWorkspace, readWorkspace} from './workspace-config.js'
 
 export type ListCategory = 'agents' | 'commands' | 'mcpServers' | 'skills' | 'tools'
 
+const CATEGORY_LABELS: Record<ListCategory, string> = {
+  agents: 'Agents',
+  commands: 'Commands',
+  mcpServers: 'MCP Servers',
+  skills: 'Skills',
+  tools: 'Tools',
+}
+
 export abstract class ListCommand extends Command {
   static override baseFlags = {
     profile: Flags.string({char: 'p', description: 'Authentication profile name', required: false}),
-    toon: Flags.boolean({description: 'Format output as toon', required: false}),
     workspace: Flags.string({
       char: 'w',
       description: 'Workspace name (uses current directory if omitted)',
       required: false,
     }),
   }
+  static override enableJsonFlag = true
   protected readonly category?: ListCategory
 
   public async run(): Promise<void> {
@@ -41,41 +52,156 @@ export abstract class ListCommand extends Command {
       additionalDirectories = localDirs
     }
 
-    const result = await list(config, {additionalDirectories, cwd})
+    const spinner = Boolean(process.stderr.isTTY)
+    if (spinner) ux.action.start('Fetching capabilities')
+
+    let result: ApiResult
+    try {
+      result = await list(config, {additionalDirectories, cwd})
+    } finally {
+      if (spinner) ux.action.stop()
+    }
+
     clearClients()
 
-    await this.refreshCapabilityCache(result)
+    if (!result.success || !result.data || typeof result.data !== 'object') {
+      if (this.jsonEnabled()) this.logJson(result)
+      else this.log(`Error: ${String(result.error ?? 'Unknown error')}`)
+      return
+    }
 
-    const filtered = this.pickCategory(result)
+    const data = result.data as {
+      agents?: string[]
+      capabilities?: CapabilityDetail[]
+      commands?: string[]
+      mcpServers?: {name: string; status: string}[]
+      plugins?: {name: string; path: string}[]
+      skills?: string[]
+      tools?: string[]
+    }
 
-    if (flags.toon) {
-      this.log(formatAsToon(filtered))
-    } else {
-      this.logJson(filtered)
+    const merged = await this.resolveMergedEntries(data, cwd)
+    if (merged) {
+      try {
+        await writeCapabilityStore(this.config.cacheDir, merged)
+      } catch {
+        // Non-fatal: a stale cache only delays dynamic command registration.
+      }
+    }
+
+    const entriesByCategory = merged ?? {
+      commands: (data.commands ?? []).map((name) => ({name})),
+      skills: (data.skills ?? []).map((name) => ({name})),
+    }
+
+    if (this.category) {
+      const entries = this.buildDisplayEntries(this.category, data, entriesByCategory)
+      if (this.jsonEnabled()) this.logJson(entries)
+      else this.renderEntries(entries)
+      return
+    }
+
+    const grouped: Record<ListCategory, string[]> = {
+      agents: this.buildDisplayEntries('agents', data, entriesByCategory),
+      commands: this.buildDisplayEntries('commands', data, entriesByCategory),
+      mcpServers: this.buildDisplayEntries('mcpServers', data, entriesByCategory),
+      skills: this.buildDisplayEntries('skills', data, entriesByCategory),
+      tools: this.buildDisplayEntries('tools', data, entriesByCategory),
+    }
+
+    if (this.jsonEnabled()) this.logJson(grouped)
+    else this.renderGrouped(grouped)
+  }
+
+  private buildDisplayEntries(
+    category: ListCategory,
+    data: {agents?: string[]; mcpServers?: {name: string; status: string}[]; tools?: string[]},
+    entriesByCategory: {commands: CapabilityEntry[]; skills: CapabilityEntry[]},
+  ): string[] {
+    switch (category) {
+      case 'agents': {
+        return data.agents ?? []
+      }
+
+      case 'commands': {
+        return entriesByCategory.commands.map(({name}) => name)
+      }
+
+      case 'mcpServers': {
+        return (data.mcpServers ?? []).map(({name}) => name)
+      }
+
+      case 'skills': {
+        return entriesByCategory.skills.map(({name}) => name)
+      }
+
+      case 'tools': {
+        return data.tools ?? []
+      }
     }
   }
 
-  private pickCategory(result: {data?: unknown; error?: unknown; success: boolean}): unknown {
-    if (!this.category || !result.success || !result.data || typeof result.data !== 'object') {
-      return result
+  private renderEntries(entries: string[]): void {
+    if (entries.length === 0) {
+      this.log('(none)')
+      return
     }
 
-    const source = result.data as Record<string, unknown>
-    return {data: {[this.category]: source[this.category]}, success: true}
+    for (const id of entries) {
+      this.log(id)
+    }
+  }
+
+  private renderGrouped(grouped: Record<ListCategory, string[]>): void {
+    const categories = Object.keys(CATEGORY_LABELS) as ListCategory[]
+    for (const category of categories) {
+      this.log(`${CATEGORY_LABELS[category]}:`)
+      this.renderEntries(grouped[category])
+      this.log('')
+    }
   }
 
   /**
-   * Persist the skills and slash commands to the capabilities cache so the
-   * init hook can register them as first-class CLI commands on the next run.
+   * Enrich the capability names reported by the SDK init message with the
+   * `description`/`argument-hint` from markdown frontmatter (covers
+   * model-invoked plugin and user skills) and the SDK's supportedCommands()
+   * metadata (covers user-invocable capabilities bundled inside Claude Code
+   * with no file on disk). Frontmatter wins per field. Returns undefined on
+   * failure so the caller can fall back to bare names without touching the
+   * on-disk cache.
    */
-  private async refreshCapabilityCache(result: {data?: unknown; success: boolean}): Promise<void> {
-    if (!result.success || !result.data || typeof result.data !== 'object') return
+  private async resolveMergedEntries(
+    data: {
+      capabilities?: CapabilityDetail[]
+      commands?: string[]
+      plugins?: {name: string; path: string}[]
+      skills?: string[]
+    },
+    cwd: string,
+  ): Promise<undefined | {commands: CapabilityEntry[]; skills: CapabilityEntry[]}> {
+    const detailsByName = new Map((data.capabilities ?? []).map((detail) => [detail.name, detail]))
 
-    const data = result.data as {commands?: string[]; skills?: string[]}
     try {
-      await writeCapabilityStore(this.config.cacheDir, {commands: data.commands ?? [], skills: data.skills ?? []})
+      const entries = await resolveCapabilityEntries({
+        commands: data.commands ?? [],
+        cwd,
+        plugins: data.plugins ?? [],
+        skills: data.skills ?? [],
+      })
+
+      const merge = (list: typeof entries.commands) =>
+        list.map((entry) => {
+          const detail = detailsByName.get(entry.name.replace(/^\//, ''))
+          return {
+            ...entry,
+            ...(entry.argumentHint || !detail?.argumentHint ? {} : {argumentHint: detail.argumentHint}),
+            ...(entry.description || !detail?.description ? {} : {description: detail.description}),
+          }
+        })
+
+      return {commands: merge(entries.commands), skills: merge(entries.skills)}
     } catch {
-      // Non-fatal: a stale cache only delays dynamic command registration.
+      return undefined
     }
   }
 }

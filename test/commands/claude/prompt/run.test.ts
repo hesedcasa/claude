@@ -16,7 +16,6 @@ describe('agent:prompt:run', () => {
   let buildWorkspaceContextStub: SinonStub
   let askStub: SinonStub
   let clearClientsStub: SinonStub
-  let formatAsToonStub: SinonStub
 
   const mockAuth = {apiKey: 'sk-ant-test', apiUrl: 'https://api.anthropic.com'}
   const mockResult = {data: {result: 'done', toolsUsed: []}, success: true}
@@ -28,7 +27,6 @@ describe('agent:prompt:run', () => {
     buildWorkspaceContextStub = stub().resolves()
     askStub = stub().resolves(mockResult)
     clearClientsStub = stub()
-    formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock('../../../../src/commands/claude/prompt/run.js', {
       '../../../../src/agent/agent-client.js': {ask: askStub, clearClients: clearClientsStub},
@@ -36,7 +34,6 @@ describe('agent:prompt:run', () => {
       '../../../../src/prompts-config.js': {readPrompts: readPromptsStub, resolvePrompt},
       '../../../../src/workspace-bash.js': {buildWorkspaceContext: buildWorkspaceContextStub},
       '../../../../src/workspace-config.js': {readWorkspace: readWorkspaceStub},
-      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     PromptRun = imported.default
   })
@@ -279,35 +276,5 @@ describe('agent:prompt:run', () => {
 
     expect(logJsonStub.calledOnce).to.be.true
     expect(logJsonStub.firstCall.args[0]).to.deep.equal(mockResult)
-  })
-
-  it('outputs TOON format of the result only when --toon is used without --debug', async () => {
-    const cmd = new PromptRun(['summarize', '--toon'], {
-      configDir: '/tmp/test-config',
-      root: process.cwd(),
-      runHook: stub().resolves({failures: [], successes: []}),
-    } as any)
-    const logStub = stub(cmd, 'log')
-
-    await cmd.run()
-
-    expect(formatAsToonStub.calledOnce).to.be.true
-    expect(formatAsToonStub.firstCall.args[0]).to.equal('done')
-    expect(logStub.calledWith('toon-output')).to.be.true
-  })
-
-  it('outputs TOON format of the full result when --toon and --debug are used', async () => {
-    const cmd = new PromptRun(['summarize', '--toon', '--debug'], {
-      configDir: '/tmp/test-config',
-      root: process.cwd(),
-      runHook: stub().resolves({failures: [], successes: []}),
-    } as any)
-    const logStub = stub(cmd, 'log')
-
-    await cmd.run()
-
-    expect(formatAsToonStub.calledOnce).to.be.true
-    expect(formatAsToonStub.firstCall.args[0]).to.deep.equal(mockResult)
-    expect(logStub.calledWith('toon-output')).to.be.true
   })
 })
