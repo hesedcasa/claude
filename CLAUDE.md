@@ -34,6 +34,7 @@ npm run find-deadcode
 ```
 src/
 ├── commands/claude/       # Oclif CLI commands (user-facing)
+│   ├── index.ts           # Interactive multi-turn chat session (streaming input mode)
 │   ├── ask.ts             # Send a natural-language prompt to the agent
 │   ├── list/              # List capabilities: index.ts (all) + tools, agents, mcp-servers
 │   ├── command/           # Slash commands: index.ts (list) + run.ts (execute by name, no leading / needed)
@@ -85,7 +86,7 @@ The `init` hook exposes slash commands as `claude command <name> [input]` and sk
 - **`init` hook (hooks/init/register-capability-commands.ts):** at startup, reads the capabilities cache (`<cacheDir>/capabilities.json`, written by `claude list` via `ListCommand.refreshCapabilityCache`) and injects one dynamic oclif command per skill/slash command into the Config's internal `_commands` map (`registerCapabilityCommands`) under its topic (`claude:command:<name>` / `claude:skill:<name>`). Registered names appear in `claude help` with the same flags as `command run`/`skill run`; each dynamic command forwards its raw argv (name without leading `/`) to `claude command run <name>` or `claude skill run <name>`. Existing command ids and topics are never replaced, so built-ins always win. Run `claude list` to (re)populate the cache.
 
 **4. AgentApi drives the SDK generator:**
-`AgentApi.ask()` iterates the `query()` async generator, collects `assistant` messages (text blocks and tool-use blocks) and the final `result` message. `AgentApi.list()` aborts after the `system/init` message to cheaply enumerate available capabilities. `AgentApi.runCommand()` sends a slash-command prompt and `AgentApi.runSkill()` sends a skills-scoped prompt (both via `ask()`); `AgentApi.run()` dispatches to one of them based on a leading `/`.
+`AgentApi.ask()` iterates the `query()` async generator, collects `assistant` messages (text blocks and tool-use blocks) and the final `result` message. `AgentApi.list()` aborts after the `system/init` message to cheaply enumerate available capabilities. `AgentApi.runCommand()` sends a slash-command prompt and `AgentApi.runSkill()` sends a skills-scoped prompt (both via `ask()`); `AgentApi.run()` dispatches to one of them based on a leading `/`. `AgentApi.chat()` uses the SDK's streaming input mode: instead of a string prompt it passes an `AsyncIterable<string>` of user prompts (wrapped as `SDKUserMessage`s), keeping the session alive across turns; each turn's `result` message fires `options.onTurnEnd` and the returned `ApiResult` summarises the session (last result text, per-turn count, cumulative usage). The root `claude` command (commands/claude/index.ts) builds that prompt stream from interactive input (`@inquirer/prompts` on a TTY, stdin lines when piped), pausing after each `yield` until `onTurnEnd` signals the turn finished; `exit`/`quit`/`/exit`/`/quit` or EOF ends the session.
 
 **5. Profiles + Workspaces (profile-config.ts / workspace-config.ts):**
 Config lives at `~/.config/claude/claude-config.json`:

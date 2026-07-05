@@ -4,6 +4,10 @@ import {stub} from 'sinon'
 
 import {AgentApi} from '../../src/agent/agent-api.js'
 
+async function* promptStream(...prompts: string[]): AsyncGenerator<string> {
+  for (const p of prompts) yield p
+}
+
 function makeQueryStub(messages: any[]): any {
   return stub().returns({
     async *[Symbol.asyncIterator]() {
@@ -255,6 +259,158 @@ describe('AgentApi', () => {
 
       expect(result.success).to.be.false
       expect(String(result.error)).to.include('result')
+    })
+  })
+
+  describe('chat', () => {
+    it('passes prompts to query as a stream of SDK user messages', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+
+      await api.chat(promptStream('first question', 'second question'))
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.prompt).to.not.be.a('string')
+
+      const messages: any[] = []
+      for await (const m of callArgs.prompt) messages.push(m)
+
+      expect(messages).to.deep.equal([
+        // eslint-disable-next-line camelcase
+        {message: {content: 'first question', role: 'user'}, parent_tool_use_id: null, type: 'user'},
+        // eslint-disable-next-line camelcase
+        {message: {content: 'second question', role: 'user'}, parent_tool_use_id: null, type: 'user'},
+      ])
+    })
+
+    it('collects turns and returns the last result text with session usage', async () => {
+      const queryFn = makeQueryStub([
+        {message: {content: [{text: 'thinking'}, {name: 'Read'}]}, type: 'assistant'},
+        // eslint-disable-next-line camelcase
+        {num_turns: 1, result: 'first answer', session_id: 'sess-1', subtype: 'success', type: 'result'},
+        {message: {content: [{name: 'Glob'}]}, type: 'assistant'},
+        // eslint-disable-next-line camelcase
+        {num_turns: 2, result: 'second answer', session_id: 'sess-1', subtype: 'success', type: 'result'},
+      ])
+
+      const api = new AgentApi(config, queryFn)
+      const result = await api.chat(promptStream('q1', 'q2'))
+
+      expect(result.success).to.be.true
+      expect((result.data as any).result).to.equal('second answer')
+      expect((result.data as any).numTurns).to.equal(2)
+      expect((result.data as any).sessionId).to.equal('sess-1')
+      expect((result.data as any).toolsUsed).to.deep.equal(['Read', 'Glob'])
+      expect((result.data as any).usage.numTurns).to.equal(2)
+    })
+
+    it('invokes onTurnEnd for every result message', async () => {
+      const onTurnEnd = stub()
+      const queryFn = makeQueryStub([
+        // eslint-disable-next-line camelcase
+        {result: 'a1', session_id: 'sess-1', subtype: 'success', type: 'result'},
+        // eslint-disable-next-line camelcase
+        {result: 'a2', session_id: 'sess-1', subtype: 'success', type: 'result'},
+      ])
+
+      const api = new AgentApi(config, queryFn)
+      await api.chat(promptStream('q1', 'q2'), {onTurnEnd})
+
+      expect(onTurnEnd.calledTwice).to.be.true
+      expect(onTurnEnd.firstCall.args[0].result).to.equal('a1')
+      expect(onTurnEnd.secondCall.args[0].result).to.equal('a2')
+      expect(onTurnEnd.secondCall.args[0].sessionId).to.equal('sess-1')
+    })
+
+    it('invokes onText and onToolUse callbacks', async () => {
+      const onText = stub()
+      const onToolUse = stub()
+      const queryFn = makeQueryStub([
+        {message: {content: [{text: 'hello'}, {name: 'Glob'}]}, type: 'assistant'},
+        {result: 'ok', subtype: 'success', type: 'result'},
+      ])
+
+      const api = new AgentApi(config, queryFn)
+      await api.chat(promptStream('hi'), {onText, onToolUse})
+
+      expect(onText.calledWith('hello')).to.be.true
+      expect(onToolUse.calledWith('Glob')).to.be.true
+    })
+
+    it('returns error when the final turn ends with an error subtype', async () => {
+      const onTurnEnd = stub()
+      const queryFn = makeQueryStub([
+        {result: 'a1', subtype: 'success', type: 'result'},
+        {subtype: 'error_max_turns', type: 'result'},
+      ])
+
+      const api = new AgentApi(config, queryFn)
+      const result = await api.chat(promptStream('q1', 'q2'), {onTurnEnd})
+
+      expect(result.success).to.be.false
+      expect(String(result.error)).to.include('error_max_turns')
+      expect(onTurnEnd.secondCall.args[0].error).to.include('error_max_turns')
+    })
+
+    it('succeeds when an error turn is followed by a successful turn', async () => {
+      const queryFn = makeQueryStub([
+        {subtype: 'error_max_turns', type: 'result'},
+        {result: 'recovered', subtype: 'success', type: 'result'},
+      ])
+
+      const api = new AgentApi(config, queryFn)
+      const result = await api.chat(promptStream('q1', 'q2'))
+
+      expect(result.success).to.be.true
+      expect((result.data as any).result).to.equal('recovered')
+      expect((result.data as any).numTurns).to.equal(2)
+    })
+
+    it('returns success with zero turns when the session ends without a result', async () => {
+      const queryFn = makeQueryStub([])
+      const api = new AgentApi(config, queryFn)
+
+      const result = await api.chat(promptStream())
+
+      expect(result.success).to.be.true
+      expect((result.data as any).numTurns).to.equal(0)
+      expect((result.data as any).result).to.equal('')
+    })
+
+    it('returns error when iteration throws', async () => {
+      const queryFn = stub().returns({
+        [Symbol.asyncIterator]: () => ({
+          next: () => Promise.reject(new Error('connection refused')),
+        }),
+      })
+      const api = new AgentApi(config, queryFn as any)
+
+      const result = await api.chat(promptStream('hi'))
+
+      expect(result.success).to.be.false
+      expect(result.error).to.equal('connection refused')
+    })
+
+    it('forwards session and tool options to query', async () => {
+      const queryFn = makeQueryStub([{result: 'ok', subtype: 'success', type: 'result'}])
+      const api = new AgentApi(config, queryFn)
+
+      await api.chat(promptStream('hi'), {
+        allowedTools: ['Read'],
+        continueSession: true,
+        forkSession: true,
+        model: 'claude-opus-4-7',
+        resume: 'sess-old',
+        systemPrompt: 'Be concise.',
+      })
+
+      const callArgs = queryFn.firstCall.args[0]
+      expect(callArgs.options.allowedTools).to.deep.equal(['Read'])
+      expect(callArgs.options.continue).to.be.true
+      expect(callArgs.options.forkSession).to.be.true
+      expect(callArgs.options.model).to.equal('claude-opus-4-7')
+      expect(callArgs.options.resume).to.equal('sess-old')
+      expect(callArgs.options.systemPrompt).to.equal('Be concise.')
     })
   })
 

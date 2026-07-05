@@ -1,4 +1,4 @@
-import {AgentApi, type AgentConfig, type ApiResult, type AskOptions} from './agent-api.js'
+import {AgentApi, type AgentConfig, type ApiResult, type AskOptions, type ChatOptions} from './agent-api.js'
 
 let agentApi: AgentApi | null = null
 
@@ -20,6 +20,15 @@ export function clearClients(): void {
 export async function ask(config: AgentConfig, prompt: string, options?: AskOptions): Promise<ApiResult> {
   const api = initAgent(config)
   return api.ask(prompt, options)
+}
+
+export async function chat(
+  config: AgentConfig,
+  prompts: AsyncIterable<string>,
+  options?: ChatOptions,
+): Promise<ApiResult> {
+  const api = initAgent(config)
+  return api.chat(prompts, options)
 }
 
 export async function list(

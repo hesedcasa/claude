@@ -1,4 +1,11 @@
-import {createSdkMcpServer, type McpServerConfig, query, type SDKMessage, tool} from '@anthropic-ai/claude-agent-sdk'
+import {
+  createSdkMcpServer,
+  type McpServerConfig,
+  query,
+  type SDKMessage,
+  type SDKUserMessage,
+  tool,
+} from '@anthropic-ai/claude-agent-sdk'
 import {z} from 'zod'
 
 import type {SandboxFs} from '../workspace-bash.js'
@@ -42,6 +49,17 @@ export interface AskOptions {
   systemPrompt?: string
 }
 
+export interface ChatOptions extends AskOptions {
+  onTurnEnd?: (turn: ChatTurn) => void
+}
+
+export interface ChatTurn {
+  error?: string
+  result?: string
+  sessionId?: string
+  usage?: UsageSummary
+}
+
 export interface UsageSummary {
   costUsd: number
   durationMs: number
@@ -55,6 +73,24 @@ interface AskResult {
   result: string
   sessionId?: string
   toolsUsed: string[]
+  usage?: UsageSummary
+}
+
+interface ChatResult {
+  model?: string
+  numTurns: number
+  result: string
+  sessionId?: string
+  toolsUsed: string[]
+  usage?: UsageSummary
+}
+
+interface ChatState {
+  finalText: string
+  lastError?: string
+  model?: string
+  numTurns: number
+  sessionId?: string
   usage?: UsageSummary
 }
 
@@ -95,6 +131,22 @@ function resolveToolOptions(options?: AskOptions): SandboxTooling {
   const allowedTools = options.allowedTools === undefined ? undefined : [...options.allowedTools, ...registeredTools]
 
   return {...sandbox, allowedTools}
+}
+
+/**
+ * Wrap a stream of plain prompt strings as SDK user messages so `query()`
+ * runs in streaming input mode (persistent session, one turn per message).
+ * @yields one SDK user message per prompt string
+ */
+async function* toUserMessages(prompts: AsyncIterable<string>): AsyncGenerator<SDKUserMessage> {
+  for await (const prompt of prompts) {
+    yield {
+      message: {content: prompt, role: 'user'},
+      // eslint-disable-next-line camelcase
+      parent_tool_use_id: null,
+      type: 'user',
+    }
+  }
 }
 
 /**
@@ -303,6 +355,67 @@ export class AgentApi {
   }
 
   /**
+   * Streaming input mode: drive `query()` with an async stream of user
+   * prompts so the session stays alive across turns. Each turn ends with
+   * a result message surfaced through `options.onTurnEnd`; the returned
+   * ApiResult summarises the whole session (last result text, cumulative
+   * usage from the final turn). The session ends when `prompts` finishes.
+   */
+  async chat(prompts: AsyncIterable<string>, options?: ChatOptions): Promise<ApiResult> {
+    try {
+      const toolOptions = resolveToolOptions(options)
+
+      const iterator = this.queryFn({
+        options: {
+          additionalDirectories: options?.additionalDirectories,
+          allowedTools: toolOptions.allowedTools,
+          continue: options?.continueSession,
+          cwd: options?.cwd,
+          disallowedTools: toolOptions.disallowedTools,
+          env: this.buildEnv(),
+          forkSession: options?.forkSession,
+          mcpServers: toolOptions.mcpServers,
+          model: options?.model ?? this.config.models?.sonnet,
+          permissionMode: 'bypassPermissions',
+          resume: options?.resume,
+          skills: options?.skills,
+          systemPrompt: options?.systemPrompt,
+        },
+        prompt: toUserMessages(prompts),
+      })
+
+      const toolsUsed: string[] = []
+      const state: ChatState = {finalText: '', numTurns: 0}
+
+      for await (const message of iterator as AsyncIterable<SDKMessage>) {
+        if (message.type === 'assistant') {
+          this.handleAssistantMessage(message, toolsUsed, options)
+        } else if (message.type === 'result') {
+          this.handleChatResult(message, state, options)
+        }
+      }
+
+      if (state.lastError) {
+        return {error: state.lastError, success: false}
+      }
+
+      return {
+        data: {
+          model: state.model,
+          numTurns: state.numTurns,
+          result: state.finalText,
+          sessionId: state.sessionId,
+          toolsUsed,
+          usage: state.usage,
+        } satisfies ChatResult,
+        success: true,
+      }
+    } catch (error: unknown) {
+      return {error: error instanceof Error ? error.message : String(error), success: false}
+    }
+  }
+
+  /**
    * Clear client (no persistent client to dispose for the SDK wrapper).
    */
   clearClients(): void {}
@@ -462,5 +575,29 @@ export class AgentApi {
         options?.onToolUse?.(block.name)
       }
     }
+  }
+
+  /**
+   * Fold one per-turn result message into the chat session state and
+   * notify the caller that the turn finished.
+   */
+  private handleChatResult(message: SDKMessage & {type: 'result'}, state: ChatState, options?: ChatOptions): void {
+    state.numTurns++
+    state.sessionId = message.session_id
+    const turn: ChatTurn = {sessionId: state.sessionId}
+
+    if (message.subtype === 'success') {
+      state.finalText = message.result
+      state.model = Object.keys(message.modelUsage ?? {})[0] ?? state.model
+      turn.result = message.result
+      turn.usage = this.extractUsage(message)
+      state.usage = turn.usage
+      state.lastError = undefined
+    } else {
+      state.lastError = `Agent turn ended with subtype: ${message.subtype}`
+      turn.error = state.lastError
+    }
+
+    options?.onTurnEnd?.(turn)
   }
 }
