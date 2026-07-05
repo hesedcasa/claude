@@ -1,4 +1,3 @@
-import {formatAsToon} from '@hesed/plugin-lib'
 import {input} from '@inquirer/prompts'
 import {Args, Command, Flags} from '@oclif/core'
 import {default as path} from 'node:path'
@@ -47,7 +46,6 @@ export default class AgentChat extends Command {
     repo: Flags.string({description: 'Filter workspace context to this repo name', required: false}),
     resume: Flags.string({description: 'Session ID to resume', required: false}),
     system: Flags.string({description: 'Custom system prompt for the agent', required: false}),
-    toon: Flags.boolean({description: 'Format output as toon', required: false}),
     workspace: Flags.string({
       char: 'w',
       description: 'Workspace name (uses current directory if omitted)',
@@ -128,10 +126,13 @@ export default class AgentChat extends Command {
     this.stdinReader?.close()
     clearClients()
 
-    if (flags.toon) {
-      this.log(formatAsToon(result))
-    } else {
-      this.logJson(result)
+    if (!result.success) {
+      this.error(String(result.error))
+    }
+
+    const {numTurns, sessionId} = result.data as {numTurns: number; sessionId?: string}
+    if (sessionId) {
+      this.log(`Session ${sessionId} ended after ${numTurns} turn(s). Resume it with: claude --resume ${sessionId}`)
     }
   }
 

@@ -10,7 +10,6 @@ describe('agent:chat', () => {
   let buildWorkspaceContextStub: SinonStub
   let chatStub: SinonStub
   let clearClientsStub: SinonStub
-  let formatAsToonStub: SinonStub
   let receivedPrompts: string[]
 
   const mockAuth = {apiKey: 'sk-ant-test', apiUrl: 'https://api.anthropic.com'}
@@ -41,14 +40,12 @@ describe('agent:chat', () => {
       consumePrompts(prompts, options),
     )
     clearClientsStub = stub()
-    formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock('../../../src/commands/claude/index.js', {
       '../../../src/agent/agent-client.js': {chat: chatStub, clearClients: clearClientsStub},
       '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
       '../../../src/workspace-bash.js': {buildWorkspaceContext: buildWorkspaceContextStub},
       '../../../src/workspace-config.js': {readWorkspace: readWorkspaceStub},
-      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     AgentChat = imported.default
   })
@@ -67,8 +64,6 @@ describe('agent:chat', () => {
     buildWorkspaceContextStub.resolves()
     chatStub.resetHistory()
     clearClientsStub.reset()
-    formatAsToonStub.reset()
-    formatAsToonStub.returns('toon-output')
   })
 
   function makeCommand(argv: string[]): any {
@@ -81,11 +76,11 @@ describe('agent:chat', () => {
     return cmd
   }
 
-  it('sends the initial prompt argument as the first message and outputs JSON', async () => {
+  it('sends the initial prompt argument as the first message and logs a session summary', async () => {
     const cmd = makeCommand(['What is the capital of France?'])
     stub(cmd, 'readLine').resolves('exit')
     const logJsonStub = stub(cmd, 'logJson')
-    stub(cmd, 'log')
+    const logStub = stub(cmd, 'log')
 
     await cmd.run()
 
@@ -94,8 +89,10 @@ describe('agent:chat', () => {
     expect(chatStub.firstCall.args[0]).to.deep.equal(mockAuth)
     expect(receivedPrompts).to.deep.equal(['What is the capital of France?'])
     expect(clearClientsStub.calledOnce).to.be.true
-    expect(logJsonStub.calledOnce).to.be.true
-    expect(logJsonStub.firstCall.args[0]).to.deep.equal(mockResult)
+    expect(logJsonStub.called).to.be.false
+    const summaryCalls = logStub.getCalls().filter((c) => String(c.args[0] ?? '').startsWith('Session sess-1 ended'))
+    expect(summaryCalls).to.have.length(1)
+    expect(summaryCalls[0].args[0]).to.include('--resume sess-1')
   })
 
   it('opts the prompt arg out of oclif stdin reading so piped lines reach the chat loop', () => {
@@ -185,8 +182,12 @@ describe('agent:chat', () => {
     stub(cmd, 'logJson')
     const logStub = stub(cmd, 'log')
 
+    let errored = false
     try {
       await cmd.run()
+    } catch {
+      // the failed chat result is surfaced through this.error
+      errored = true
     } finally {
       chatStub.callsFake(async (_config: any, prompts: AsyncIterable<string>, options: any) =>
         consumePrompts(prompts, options),
@@ -194,6 +195,7 @@ describe('agent:chat', () => {
     }
 
     expect(logStub.calledWith('Agent turn ended with subtype: error_max_turns')).to.be.true
+    expect(errored).to.be.true
   })
 
   it('wires onText and onToolUse streaming callbacks', async () => {
@@ -279,18 +281,6 @@ describe('agent:chat', () => {
 
     const opts = chatStub.firstCall.args[2]
     expect(opts.model).to.equal('claude-sonnet-4-6')
-  })
-
-  it('outputs TOON format when --toon flag is used', async () => {
-    const cmd = makeCommand(['hi', '--toon'])
-    stub(cmd, 'readLine').resolves('exit')
-    const logStub = stub(cmd, 'log')
-
-    await cmd.run()
-
-    expect(formatAsToonStub.calledOnce).to.be.true
-    expect(formatAsToonStub.firstCall.args[0]).to.deep.equal(mockResult)
-    expect(logStub.calledWith('toon-output')).to.be.true
   })
 
   it('applies workspace context to chat options when workspace has repos', async () => {
