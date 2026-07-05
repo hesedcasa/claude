@@ -10,7 +10,6 @@ describe('agent:run', () => {
   let buildWorkspaceContextStub: SinonStub
   let runStub: SinonStub
   let clearClientsStub: SinonStub
-  let formatAsToonStub: SinonStub
 
   const mockAuth = {apiKey: 'sk-ant-test', apiUrl: 'https://api.anthropic.com'}
   const mockUsage = {costUsd: 0.0123, durationMs: 4321, inputTokens: 1500, numTurns: 3, outputTokens: 250}
@@ -22,7 +21,6 @@ describe('agent:run', () => {
     buildWorkspaceContextStub = stub().resolves()
     runStub = stub().resolves(mockResult)
     clearClientsStub = stub()
-    formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock(
       '../../../src/commands/claude/run.js',
@@ -32,14 +30,13 @@ describe('agent:run', () => {
         '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
         '../../../src/workspace-bash.js': {buildWorkspaceContext: buildWorkspaceContextStub},
         '../../../src/workspace-config.js': {readWorkspace: readWorkspaceStub},
-        '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
       },
     )
     AgentRun = imported.default
   })
 
-  it('forwards slash command name and outputs JSON without appending summary to stdout', async () => {
-    const cmd = new AgentRun(['/help'], {
+  it('forwards slash command name and outputs JSON with --json', async () => {
+    const cmd = new AgentRun(['/help', '--json'], {
       configDir: '/tmp/test-agent-config',
       root: process.cwd(),
       runHook: stub().resolves({failures: [], successes: []}),
@@ -119,14 +116,14 @@ describe('agent:run', () => {
     expect(opts.allowedTools).to.deep.equal(['Read', 'Glob', 'Edit'])
   })
 
-  it('wires onText callback when --stream is set', async () => {
-    const cmd = new AgentRun(['/help', '--stream'], {
+  it('streams plain text by default (no --json)', async () => {
+    const cmd = new AgentRun(['/help'], {
       configDir: '/tmp/test-agent-config',
       root: process.cwd(),
       runHook: stub().resolves({failures: [], successes: []}),
     } as any)
     const logStub = stub(cmd, 'log')
-    stub(cmd, 'logJson')
+    const logJsonStub = stub(cmd, 'logJson')
 
     await cmd.run()
 
@@ -136,20 +133,23 @@ describe('agent:run', () => {
     expect(logStub.calledWith('streamed-chunk')).to.be.true
     opts.onToolUse('Read')
     expect(logStub.calledWith('[tool: Read]')).to.be.true
+    expect(logJsonStub.called).to.be.false
   })
 
-  it('outputs TOON format when --toon is used', async () => {
-    const cmd = new AgentRun(['/help', '--toon'], {
+  it('does not wire streaming callbacks when --json is set', async () => {
+    const cmd = new AgentRun(['/help', '--json'], {
       configDir: '/tmp/test-agent-config',
       root: process.cwd(),
       runHook: stub().resolves({failures: [], successes: []}),
     } as any)
-    const logStub = stub(cmd, 'log')
+    stub(cmd, 'log')
+    stub(cmd, 'logJson')
 
     await cmd.run()
 
-    expect(formatAsToonStub.calledOnce).to.be.true
-    expect(logStub.calledWith('toon-output')).to.be.true
+    const opts = runStub.firstCall.args[3]
+    expect(opts.onText === undefined).to.be.true
+    expect(opts.onToolUse === undefined).to.be.true
   })
 
   it('passes --profile to loadAgentConfig', async () => {

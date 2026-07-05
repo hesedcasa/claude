@@ -624,11 +624,12 @@ describe('AgentApi', () => {
   })
 
   describe('list', () => {
-    it('extracts skills, commands, tools, agents, mcpServers from init message', async () => {
+    it('extracts skills, commands, tools, agents, mcpServers, plugins from init message', async () => {
       const initMessage = {
         agents: ['code-reviewer', 'planner'],
         // eslint-disable-next-line camelcase
         mcp_servers: [{name: 'github', status: 'connected'}],
+        plugins: [{name: 'sentry', path: '/plugins/sentry'}],
         skills: ['init', 'review'],
         // eslint-disable-next-line camelcase
         slash_commands: ['help', 'clear'],
@@ -646,9 +647,69 @@ describe('AgentApi', () => {
         agents: ['code-reviewer', 'planner'],
         commands: ['help', 'clear'],
         mcpServers: [{name: 'github', status: 'connected'}],
+        plugins: [{name: 'sentry', path: '/plugins/sentry'}],
         skills: ['init', 'review'],
         tools: ['Read', 'Edit', 'Bash'],
       })
+    })
+
+    it('collects capability metadata via supportedCommands when the query supports it', async () => {
+      const supported = [
+        {aliases: [], argumentHint: '[pr-number]', description: 'Review a PR', name: 'review'},
+        {aliases: [], argumentHint: '', description: 'Compact the conversation', name: 'compact'},
+      ]
+      const queryFn = stub().returns({
+        supportedCommands: stub().resolves(supported),
+
+        async *[Symbol.asyncIterator]() {
+          /* eslint-disable camelcase */
+          yield {
+            agents: [],
+            mcp_servers: [],
+            skills: ['review'],
+            slash_commands: ['compact'],
+            subtype: 'init',
+            tools: [],
+            type: 'system',
+          }
+          /* eslint-enable camelcase */
+        },
+      })
+
+      const api = new AgentApi(config, queryFn as any)
+      const result = await api.list()
+
+      expect(result.success).to.be.true
+      expect((result.data as any).capabilities).to.deep.equal([
+        {argumentHint: '[pr-number]', description: 'Review a PR', name: 'review'},
+        {argumentHint: '', description: 'Compact the conversation', name: 'compact'},
+      ])
+    })
+
+    it('omits capability metadata when supportedCommands fails', async () => {
+      const queryFn = stub().returns({
+        supportedCommands: stub().rejects(new Error('not supported')),
+
+        async *[Symbol.asyncIterator]() {
+          /* eslint-disable camelcase */
+          yield {
+            agents: [],
+            mcp_servers: [],
+            skills: [],
+            slash_commands: [],
+            subtype: 'init',
+            tools: [],
+            type: 'system',
+          }
+          /* eslint-enable camelcase */
+        },
+      })
+
+      const api = new AgentApi(config, queryFn as any)
+      const result = await api.list()
+
+      expect(result.success).to.be.true
+      expect(result.data).to.not.have.property('capabilities')
     })
 
     it('passes an AbortController via options', async () => {
@@ -709,7 +770,7 @@ describe('AgentApi', () => {
       const result = await api.list()
 
       expect(result.success).to.be.true
-      expect(result.data).to.deep.equal({agents: [], commands: [], mcpServers: [], skills: [], tools: []})
+      expect(result.data).to.deep.equal({agents: [], commands: [], mcpServers: [], plugins: [], skills: [], tools: []})
     })
 
     it('returns success when generator throws during cleanup after init is found', async () => {

@@ -1,4 +1,3 @@
-import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags} from '@oclif/core'
 import {default as path} from 'node:path'
 
@@ -38,7 +37,6 @@ export default class AgentWorkflowRun extends Command {
     repo: Flags.string({description: 'Filter workspace context to this repo name', required: false}),
     stream: Flags.boolean({description: 'Stream assistant text as it arrives', required: false}),
     system: Flags.string({description: 'Custom system prompt for the agent', required: false}),
-    toon: Flags.boolean({description: 'Format output as toon', required: false}),
     workspace: Flags.string({
       char: 'w',
       description: 'Override the workflow workspace (uses workflow setting if omitted)',
@@ -98,11 +96,7 @@ export default class AgentWorkflowRun extends Command {
     })
     clearClients()
 
-    if (flags.toon) {
-      this.log(formatAsToon(result))
-    } else {
-      this.logJson(result)
-    }
+    this.logJson(result)
 
     if (!result.success) {
       this.error(typeof result.error === 'string' ? result.error : 'Workflow run failed.')

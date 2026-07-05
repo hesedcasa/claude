@@ -94,10 +94,25 @@ interface ChatState {
   usage?: UsageSummary
 }
 
+export interface CapabilityDetail {
+  argumentHint?: string
+  description?: string
+  name: string
+}
+
 interface ListResult {
   agents: string[]
+  /**
+   * Metadata for every user-invocable skill/slash command from the SDK's
+   * supportedCommands() control request (covers capabilities bundled inside
+   * Claude Code that have no markdown file on disk). Consumed by the
+   * capabilities cache; stripped from the `claude list` display output.
+   */
+  capabilities?: CapabilityDetail[]
   commands: string[]
   mcpServers: {name: string; status: string}[]
+  /** Plugin install paths, used to locate plugin skill/command frontmatter. */
+  plugins: {name: string; path: string}[]
   skills: string[]
   tools: string[]
 }
@@ -422,7 +437,8 @@ export class AgentApi {
 
   /**
    * List the skills, slash commands, tools, subagents, and MCP servers
-   * available to the current session. Reads the SDK's init system message
+   * available to the current session. Reads the SDK's init system message,
+   * fetches capability metadata via the supportedCommands() control request,
    * and aborts the run immediately afterwards.
    */
   async list(options?: Pick<AskOptions, 'additionalDirectories' | 'cwd'>): Promise<ApiResult> {
@@ -442,10 +458,13 @@ export class AgentApi {
 
       for await (const message of iterator as AsyncIterable<SDKMessage>) {
         if (message.type === 'system' && message.subtype === 'init') {
+          const capabilities = await this.fetchCapabilityDetails(iterator)
           initData = {
             agents: message.agents ?? [],
+            ...(capabilities ? {capabilities} : {}),
             commands: message.slash_commands ?? [],
             mcpServers: message.mcp_servers ?? [],
+            plugins: message.plugins ?? [],
             skills: message.skills ?? [],
             tools: message.tools ?? [],
           } satisfies ListResult
@@ -480,9 +499,7 @@ export class AgentApi {
       return {error: 'Name is required', success: false}
     }
 
-    return trimmed.startsWith('/')
-      ? this.runCommand(trimmed, input, options)
-      : this.runSkill(trimmed, input, options)
+    return trimmed.startsWith('/') ? this.runCommand(trimmed, input, options) : this.runSkill(trimmed, input, options)
   }
 
   /**
@@ -554,6 +571,23 @@ export class AgentApi {
       inputTokens,
       numTurns: message.num_turns ?? 0,
       outputTokens,
+    }
+  }
+
+  /**
+   * Fetch name/description/argument-hint metadata for every skill and slash
+   * command via the SDK's supportedCommands() control request. This covers
+   * capabilities bundled inside Claude Code itself, which have no markdown
+   * file on disk. Returns undefined when the request fails (e.g. stubbed
+   * queries in tests) — cached entries then fall back to generic help text.
+   */
+  private async fetchCapabilityDetails(iterator: unknown): Promise<CapabilityDetail[] | undefined> {
+    try {
+      const query = iterator as {supportedCommands(): Promise<CapabilityDetail[]>}
+      const supported = await query.supportedCommands()
+      return supported.map(({argumentHint, description, name}) => ({argumentHint, description, name}))
+    } catch {
+      return undefined
     }
   }
 

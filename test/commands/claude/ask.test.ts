@@ -10,7 +10,6 @@ describe('agent:ask', () => {
   let buildWorkspaceContextStub: SinonStub
   let askStub: SinonStub
   let clearClientsStub: SinonStub
-  let formatAsToonStub: SinonStub
 
   const mockAuth = {apiKey: 'sk-ant-test', apiUrl: 'https://api.anthropic.com'}
   const mockUsage = {costUsd: 0.0123, durationMs: 4321, inputTokens: 1500, numTurns: 3, outputTokens: 250}
@@ -25,14 +24,12 @@ describe('agent:ask', () => {
     buildWorkspaceContextStub = stub().resolves()
     askStub = stub().resolves(mockResult)
     clearClientsStub = stub()
-    formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock('../../../src/commands/claude/ask.js', {
       '../../../src/agent/agent-client.js': {ask: askStub, clearClients: clearClientsStub},
       '../../../src/agent/profile-config.js': {loadAgentConfig: loadAgentConfigStub},
       '../../../src/workspace-bash.js': {buildWorkspaceContext: buildWorkspaceContextStub},
       '../../../src/workspace-config.js': {readWorkspace: readWorkspaceStub},
-      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     AgentAsk = imported.default
   })
@@ -51,8 +48,6 @@ describe('agent:ask', () => {
     askStub.reset()
     askStub.resolves(mockResult)
     clearClientsStub.reset()
-    formatAsToonStub.reset()
-    formatAsToonStub.returns('toon-output')
   })
 
   it('calls ask with the prompt and outputs JSON', async () => {
@@ -157,21 +152,6 @@ describe('agent:ask', () => {
     expect(logStub.calledWith('hello-stream')).to.be.true
     opts.onToolUse('Read')
     expect(logStub.calledWith('[tool: Read]')).to.be.true
-  })
-
-  it('outputs TOON format when --toon flag is used', async () => {
-    const cmd = new AgentAsk(['hi', '--toon'], {
-      configDir: '/tmp/test-agent-config',
-      root: process.cwd(),
-      runHook: stub().resolves({failures: [], successes: []}),
-    } as any)
-    const logStub = stub(cmd, 'log')
-
-    await cmd.run()
-
-    expect(formatAsToonStub.calledOnce).to.be.true
-    expect(formatAsToonStub.firstCall.args[0]).to.deep.equal(mockResult)
-    expect(logStub.calledWith('toon-output')).to.be.true
   })
 
   it('passes --model to ask options', async () => {

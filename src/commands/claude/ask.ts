@@ -1,4 +1,3 @@
-import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags} from '@oclif/core'
 import {default as path} from 'node:path'
 
@@ -40,7 +39,6 @@ export default class AgentAsk extends Command {
     resume: Flags.string({description: 'Session ID to resume', required: false}),
     stream: Flags.boolean({description: 'Stream assistant text as it arrives', required: false}),
     system: Flags.string({description: 'Custom system prompt for the agent', required: false}),
-    toon: Flags.boolean({description: 'Format output as toon', required: false}),
     workspace: Flags.string({
       char: 'w',
       description: 'Workspace name (uses current directory if omitted)',
@@ -109,10 +107,6 @@ export default class AgentAsk extends Command {
     })
     clearClients()
 
-    if (flags.toon) {
-      this.log(formatAsToon(result))
-    } else {
-      this.logJson(result)
-    }
+    this.logJson(result)
   }
 }

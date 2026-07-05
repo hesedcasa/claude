@@ -18,8 +18,7 @@ export default class AgentChat extends Command {
     // this arg; piped lines must reach the chat loop as individual turns.
     prompt: Args.string({description: 'Optional first message to send', ignoreStdin: true, required: false}),
   }
-  static override description =
-    'Chat with the Claude agent in a persistent interactive session (streaming input mode)'
+  static override description = 'Chat with the Claude agent in a persistent interactive session (streaming input mode)'
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> "Analyze this codebase for security issues"',

@@ -1,4 +1,3 @@
-import {formatAsToon} from '@hesed/plugin-lib'
 import {Command, Flags, ux} from '@oclif/core'
 import {default as path} from 'node:path'
 
@@ -23,15 +22,16 @@ export abstract class RunCommand extends Command {
     }),
     profile: Flags.string({char: 'p', description: 'Authentication profile name', required: false}),
     repo: Flags.string({description: 'Filter workspace context to this repo name', required: false}),
-    stream: Flags.boolean({description: 'Stream assistant text as it arrives', required: false}),
     system: Flags.string({description: 'Custom system prompt for the agent', required: false}),
-    toon: Flags.boolean({description: 'Format output as toon', required: false}),
     workspace: Flags.string({
       char: 'w',
       description: 'Workspace name (uses current directory if omitted)',
       required: false,
     }),
   }
+  // Enables oclif's global `--json` flag: `this.jsonEnabled()` reports whether
+  // it was passed, and JSON mode suppresses the streamed plain-text output.
+  static override enableJsonFlag = true
 
   protected abstract invoke(
     config: AgentConfig,
@@ -61,8 +61,11 @@ export abstract class RunCommand extends Command {
           .filter(Boolean)
       : []
 
+    // Default to streaming plain text; only buffer for JSON output (--json).
+    const json = this.jsonEnabled()
+
     // Spinner would garble streamed output and pollute stderr in scripts.
-    const spinner = !flags.stream && Boolean(process.stderr.isTTY)
+    const spinner = json && Boolean(process.stderr.isTTY)
     if (spinner) ux.action.start(`Running ${name}`)
 
     let result: ApiResult
@@ -71,8 +74,8 @@ export abstract class RunCommand extends Command {
         additionalDirectories: workspaceContext?.additionalDirectories,
         allowedTools,
         cwd: workspaceContext?.cwd ?? process.cwd(),
-        onText: flags.stream ? (text: string) => this.log(text) : undefined,
-        onToolUse: flags.stream ? (toolName: string) => this.log(`[tool: ${toolName}]`) : undefined,
+        onText: json ? undefined : (text: string) => this.log(text),
+        onToolUse: json ? undefined : (toolName: string) => this.log(`[tool: ${toolName}]`),
         sandboxExec: workspaceContext?.sandboxExec,
         sandboxFs: workspaceContext?.sandboxFs,
         systemPrompt,
@@ -83,10 +86,13 @@ export abstract class RunCommand extends Command {
 
     clearClients()
 
-    if (flags.toon) {
-      this.log(formatAsToon(result))
-    } else {
+    if (json) {
       this.logJson(result)
+      return
+    }
+
+    if (!result.success) {
+      this.error(String(result.error))
     }
   }
 

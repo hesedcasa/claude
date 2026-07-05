@@ -1,4 +1,3 @@
-import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags} from '@oclif/core'
 
 import {forkAgentSession} from '../../../agent/session-api.js'
@@ -15,7 +14,6 @@ export default class SessionFork extends Command {
   static override flags = {
     dir: Flags.string({description: 'Project directory the session belongs to', required: false}),
     title: Flags.string({description: 'Title for the forked session', required: false}),
-    toon: Flags.boolean({description: 'Format output as toon', required: false}),
   }
 
   public async run(): Promise<void> {
@@ -26,10 +24,6 @@ export default class SessionFork extends Command {
       this.error(String(result.error))
     }
 
-    if (flags.toon) {
-      this.log(formatAsToon(result))
-    } else {
-      this.logJson(result)
-    }
+    this.logJson(result)
   }
 }

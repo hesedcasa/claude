@@ -6,17 +6,14 @@ import {type SinonStub, stub} from 'sinon'
 describe('agent:session', () => {
   let SessionList: any
   let listAgentSessionsStub: SinonStub
-  let formatAsToonStub: SinonStub
 
   const mockResult = {data: {sessions: [{sessionId: 'sess-1', summary: 'Analyze auth'}]}, success: true}
 
   beforeEach(async () => {
     listAgentSessionsStub = stub().resolves(mockResult)
-    formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock('../../../../src/commands/claude/session/index.js', {
       '../../../../src/agent/session-api.js': {listAgentSessions: listAgentSessionsStub},
-      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     SessionList = imported.default
   })
@@ -60,19 +57,5 @@ describe('agent:session', () => {
     await cmd.run()
 
     expect(listAgentSessionsStub.firstCall.args[0].dir === undefined).to.be.true
-  })
-
-  it('outputs TOON format when --toon flag is used', async () => {
-    const cmd = new SessionList(['--toon'], {
-      configDir: '/tmp/test-config',
-      root: process.cwd(),
-      runHook: stub().resolves({failures: [], successes: []}),
-    } as any)
-    const logStub = stub(cmd, 'log')
-
-    await cmd.run()
-
-    expect(formatAsToonStub.firstCall.args[0]).to.deep.equal(mockResult)
-    expect(logStub.calledWith('toon-output')).to.be.true
   })
 })

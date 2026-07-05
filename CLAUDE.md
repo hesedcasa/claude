@@ -52,13 +52,13 @@ src/
 │   └── usage.ts           # formatUsageSummary helper
 ├── hooks/
 │   └── init/register-capability-commands.ts  # init hook: registers cached skills/commands as first-class commands
-├── capability-commands.ts # Capabilities cache (capabilities.json) + dynamic oclif command factory/registration
+├── capability-commands.ts # Capabilities cache (capabilities.json, entries {name, description?, argumentHint?}) + dynamic oclif command factory/registration
+├── capability-metadata.ts # Frontmatter enrichment for the cache: reads description/argument-hint from SKILL.md / command .md (project .claude, user dir, plugin paths)
 ├── list-command.ts        # ListCommand base class shared by the list-style commands (category filter + cache refresh)
 ├── run-command.ts         # RunCommand base class shared by run, command run, skill run (workspace context + output)
 ├── prompts-config.ts      # Saved prompts {body (user prompt), system, description} in claude-prompts.jsonl — JSON Lines, one {name: config} object per line (name is the object key, not a field) (readPrompts, savePrompts, resolvePrompt); {{name}} templating via extractPlaceholders/renderPrompt (filled by `prompt run --arg name=value`)
 ├── workspace-config.ts    # Workspace entries {mode, repos}, path helpers (readWorkspace, etc.)
-├── workspace-bash.ts      # Workspace context: local dirs or just-bash sandbox (git clone + virtual fs)
-└── format.ts              # TOON output formatting
+└── workspace-bash.ts      # Workspace context: local dirs or just-bash sandbox (git clone + virtual fs)
 ```
 
 ### Key Architectural Patterns
@@ -84,6 +84,7 @@ interface ApiResult {
 The `init` hook exposes slash commands as `claude command <name> [input]` and skills as `claude skill <name> [input]`:
 
 - **`init` hook (hooks/init/register-capability-commands.ts):** at startup, reads the capabilities cache (`<cacheDir>/capabilities.json`, written by `claude list` via `ListCommand.refreshCapabilityCache`) and injects one dynamic oclif command per skill/slash command into the Config's internal `_commands` map (`registerCapabilityCommands`) under its topic (`claude:command:<name>` / `claude:skill:<name>`). Registered names appear in `claude help` with the same flags as `command run`/`skill run`; each dynamic command forwards its raw argv (name without leading `/`) to `claude command run <name>` or `claude skill run <name>`. Existing command ids and topics are never replaced, so built-ins always win. Run `claude list` to (re)populate the cache.
+- **Capability metadata (capability-metadata.ts + supportedCommands):** when `claude list` refreshes the cache, each entry gets a `description`/`argumentHint` merged from two sources. (1) Markdown frontmatter on disk (`SKILL.md` for skills, `<name>.md` for commands; probed in the project `.claude` dir, the user-level Claude dir, and the owning plugin's path from the init message's `plugins` — each kind also probes the other layout since Claude Code lists commands among skills and vice versa) — this covers model-invoked plugin/user skills. (2) The SDK's `supportedCommands()` control request, called by `AgentApi.list()` after init — this covers user-invocable capabilities, including ones bundled inside Claude Code with no file on disk (e.g. `simplify`). Frontmatter wins per field. Dynamic commands surface the metadata as their help description and `INPUT` argument hint (generic fallback when neither source has it; legacy name-only caches still load). The `capabilities` and `plugins` fields ride on the list result for the cache and are stripped from `claude list` display output.
 
 **4. AgentApi drives the SDK generator:**
 `AgentApi.ask()` iterates the `query()` async generator, collects `assistant` messages (text blocks and tool-use blocks) and the final `result` message. `AgentApi.list()` aborts after the `system/init` message to cheaply enumerate available capabilities. `AgentApi.runCommand()` sends a slash-command prompt and `AgentApi.runSkill()` sends a skills-scoped prompt (both via `ask()`); `AgentApi.run()` dispatches to one of them based on a leading `/`. `AgentApi.chat()` uses the SDK's streaming input mode: instead of a string prompt it passes an `AsyncIterable<string>` of user prompts (wrapped as `SDKUserMessage`s), keeping the session alive across turns; each turn's `result` message fires `options.onTurnEnd` and the returned `ApiResult` summarises the session (last result text, per-turn count, cumulative usage). The root `claude` command (commands/claude/index.ts) builds that prompt stream from interactive input (`@inquirer/prompts` on a TTY, stdin lines when piped), pausing after each `yield` until `onTurnEnd` signals the turn finished; `exit`/`quit`/`/exit`/`/quit` or EOF ends the session.
@@ -162,7 +163,6 @@ static override args = {
 ## Output Formatting
 
 - Default: `this.logJson(result)`
-- TOON format: `this.log(formatAsToon(result))` with `--toon` flag
 - Usage summary: `formatUsageSummary(usage)` prints token/cost/duration line (used in `run.ts`)
 
 ## Commit Message Convention

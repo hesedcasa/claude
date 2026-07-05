@@ -1,4 +1,3 @@
-import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags, ux} from '@oclif/core'
 import {default as path} from 'node:path'
 
@@ -41,7 +40,6 @@ export default class PromptRun extends Command {
     profile: Flags.string({char: 'p', description: 'Authentication profile name', required: false}),
     repo: Flags.string({description: 'Filter workspace context to this repo name', required: false}),
     system: Flags.string({description: "Override the prompt's saved system prompt", required: false}),
-    toon: Flags.boolean({description: 'Format output as toon', required: false}),
     workspace: Flags.string({
       char: 'w',
       description: 'Workspace name (uses current directory if omitted)',
@@ -155,7 +153,6 @@ export default class PromptRun extends Command {
     clearClients()
 
     // Default shows the agent's result only; --debug includes the surrounding metadata.
-    // --toon formats whichever payload is selected.
     if (!result.success && !flags.debug) {
       this.error(typeof result.error === 'string' ? result.error : JSON.stringify(result.error))
     }
@@ -163,9 +160,7 @@ export default class PromptRun extends Command {
     const data = result.data as undefined | {result?: unknown}
     const payload = flags.debug ? result : (data?.result ?? result.data ?? {})
 
-    if (flags.toon) {
-      this.log(formatAsToon(payload))
-    } else if (typeof payload === 'string') {
+    if (typeof payload === 'string') {
       this.log(payload)
     } else {
       this.logJson(payload)

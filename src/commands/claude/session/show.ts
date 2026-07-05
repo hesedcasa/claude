@@ -1,4 +1,3 @@
-import {formatAsToon} from '@hesed/plugin-lib'
 import {Args, Command, Flags} from '@oclif/core'
 
 import {getAgentSessionInfo, getAgentSessionMessages} from '../../../agent/session-api.js'
@@ -11,14 +10,13 @@ export default class SessionShow extends Command {
   static override examples = [
     '<%= config.bin %> <%= command.id %> 4f8b6f2a-1234-4c56-8d90-abcdef012345',
     '<%= config.bin %> <%= command.id %> 4f8b6f2a-1234-4c56-8d90-abcdef012345 --messages',
-    '<%= config.bin %> <%= command.id %> 4f8b6f2a-1234-4c56-8d90-abcdef012345 --messages --limit 20 --toon',
+    '<%= config.bin %> <%= command.id %> 4f8b6f2a-1234-4c56-8d90-abcdef012345 --messages --limit 20',
   ]
   static override flags = {
     dir: Flags.string({description: 'Project directory the session belongs to', required: false}),
     limit: Flags.integer({description: 'Maximum number of messages to return (with --messages)', required: false}),
     messages: Flags.boolean({description: 'Include the session conversation messages', required: false}),
     offset: Flags.integer({description: 'Number of messages to skip (with --messages)', required: false}),
-    toon: Flags.boolean({description: 'Format output as toon', required: false}),
   }
 
   public async run(): Promise<void> {
@@ -46,10 +44,6 @@ export default class SessionShow extends Command {
       }
     }
 
-    if (flags.toon) {
-      this.log(formatAsToon(result))
-    } else {
-      this.logJson(result)
-    }
+    this.logJson(result)
   }
 }

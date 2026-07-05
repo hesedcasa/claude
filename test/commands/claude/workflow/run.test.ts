@@ -11,7 +11,6 @@ describe('agent:workflow:run', () => {
   let buildWorkspaceContextStub: SinonStub
   let askStub: SinonStub
   let clearClientsStub: SinonStub
-  let formatAsToonStub: SinonStub
 
   const mockAuth = {apiKey: 'sk-ant-test', apiUrl: 'https://api.anthropic.com'}
   const mockResult = {data: {result: 'done', toolsUsed: []}, success: true}
@@ -24,7 +23,6 @@ describe('agent:workflow:run', () => {
     buildWorkspaceContextStub = stub().resolves()
     askStub = stub().resolves(mockResult)
     clearClientsStub = stub()
-    formatAsToonStub = stub().returns('toon-output')
 
     const imported = await esmock('../../../../src/commands/claude/workflow/run.js', {
       '../../../../src/agent/agent-client.js': {ask: askStub, clearClients: clearClientsStub},
@@ -32,7 +30,6 @@ describe('agent:workflow:run', () => {
       '../../../../src/workflow-config.js': {readWorkflow: readWorkflowStub},
       '../../../../src/workspace-bash.js': {buildWorkspaceContext: buildWorkspaceContextStub},
       '../../../../src/workspace-config.js': {readWorkspace: readWorkspaceStub},
-      '@hesed/plugin-lib': {formatAsToon: formatAsToonStub},
     })
     AgentWorkflowRun = imported.default
   })
@@ -178,20 +175,6 @@ describe('agent:workflow:run', () => {
     expect(logStub.calledWith('streamed-chunk')).to.be.true
     opts.onToolUse('Read')
     expect(logStub.calledWith('[tool: Read]')).to.be.true
-  })
-
-  it('outputs TOON format when --toon is used', async () => {
-    const cmd = new AgentWorkflowRun(['daily-review', '--toon'], {
-      configDir: '/tmp/test-config',
-      root: process.cwd(),
-      runHook: stub().resolves({failures: [], successes: []}),
-    } as any)
-    const logStub = stub(cmd, 'log')
-
-    await cmd.run()
-
-    expect(formatAsToonStub.calledOnce).to.be.true
-    expect(logStub.calledWith('toon-output')).to.be.true
   })
 
   it('passes --profile to loadAgentConfig', async () => {
