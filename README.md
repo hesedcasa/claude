@@ -321,8 +321,6 @@ Built-in commands and topics (`ask`, `run`, `list`, `auth`, `workspace`) always 
 * [`claude claude skill trello-qa-triage analyze-serenity-report [INPUT]`](#claude-claude-skill-trello-qa-triage-analyze-serenity-report-input)
 * [`claude claude skill update-config [INPUT]`](#claude-claude-skill-update-config-input)
 * [`claude claude skill verify [INPUT]`](#claude-claude-skill-verify-input)
-* [`claude claude workflow`](#claude-claude-workflow)
-* [`claude claude workflow run NAME [INPUT]`](#claude-claude-workflow-run-name-input)
 * [`claude claude workspace add`](#claude-claude-workspace-add)
 * [`claude claude workspace default`](#claude-claude-workspace-default)
 * [`claude claude workspace delete`](#claude-claude-workspace-delete)
@@ -7487,60 +7485,6 @@ DESCRIPTION
   diff that only touches tests, docs, or other code with no runtime surface to drive (a change to product source always
   has one) — there's nothing to observe.
 ```
-
-## `claude claude workflow`
-
-List saved workflows
-
-```
-USAGE
-  $ claude claude workflow [--json]
-
-GLOBAL FLAGS
-  --json  Format output as json.
-
-DESCRIPTION
-  List saved workflows
-
-EXAMPLES
-  $ claude claude workflow
-```
-
-_See code: [src/commands/claude/workflow/index.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/workflow/index.ts)_
-
-## `claude claude workflow run NAME [INPUT]`
-
-Run a saved workflow by name
-
-```
-USAGE
-  $ claude claude workflow run NAME [INPUT] [--allow-tools <value>] [-p <value>] [--repo <value>] [--stream] [--system
-    <value>] [-w <value>]
-
-ARGUMENTS
-  NAME     Workflow name
-  [INPUT]  Additional input to append to the workflow prompt
-
-FLAGS
-  -p, --profile=<value>      Authentication profile name
-  -w, --workspace=<value>    Override the workflow workspace (uses workflow setting if omitted)
-      --allow-tools=<value>  Comma-separated list of tools the agent may use (e.g. Read,Edit,Glob)
-      --repo=<value>         Filter workspace context to this repo name
-      --stream               Stream assistant text as it arrives
-      --system=<value>       Custom system prompt for the agent
-
-DESCRIPTION
-  Run a saved workflow by name
-
-EXAMPLES
-  $ claude claude workflow run daily-review
-
-  $ claude claude workflow run daily-review "focus on auth module"
-
-  $ claude claude workflow run daily-review --stream
-```
-
-_See code: [src/commands/claude/workflow/run.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/workflow/run.ts)_
 
 ## `claude claude workspace add`
 
