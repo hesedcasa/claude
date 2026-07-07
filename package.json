@@ -1,7 +1,7 @@
 {
   "name": "@hesed/claude",
   "description": "CLI for running Claude agents, skills, and slash commands via the Anthropic Agent SDK",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "Hesed",
   "bin": {
     "claude": "./bin/run.js"
