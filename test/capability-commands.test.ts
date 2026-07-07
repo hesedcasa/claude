@@ -74,7 +74,7 @@ describe('capability-commands', () => {
       await writeCapabilityStore(testCacheDir, {commands: ['/compact', 'help'], skills: ['review']})
 
       const config = makeConfig()
-      await registerCapabilityCommands(config as any)
+      await registerCapabilityCommands(config as any, 'claude:list')
 
       expect([...config._commands.keys()]).to.have.members([
         'claude:skill:review',
@@ -94,7 +94,7 @@ describe('capability-commands', () => {
       })
 
       const config = makeConfig()
-      await registerCapabilityCommands(config as any)
+      await registerCapabilityCommands(config as any, 'claude:list')
 
       expect(config._commands.get('claude:command:commit').description).to.equal('Create a git commit')
       expect(config._commands.get('claude:skill:review').description).to.equal('Review a pull request')
@@ -107,7 +107,7 @@ describe('capability-commands', () => {
       await writeCapabilityStore(testCacheDir, {commands: [{name: 'compact'}], skills: []})
 
       const config = makeConfig()
-      await registerCapabilityCommands(config as any)
+      await registerCapabilityCommands(config as any, 'claude:list')
 
       expect(config._commands.get('claude:command:compact').description).to.equal('Run the /compact slash command')
       const CmdClass = await config._commands.get('claude:command:compact').load()
@@ -116,9 +116,46 @@ describe('capability-commands', () => {
 
     it('does nothing when the cache is missing', async () => {
       const config = makeConfig()
+      await registerCapabilityCommands(config as any, 'claude:list')
+
+      expect(config._commands.size).to.equal(0)
+    })
+
+    it('does nothing when the invoked command is unrelated to list/command/skill', async () => {
+      await writeCapabilityStore(testCacheDir, {commands: ['help'], skills: ['review']})
+
+      const config = makeConfig()
+      await registerCapabilityCommands(config as any, 'claude:ask')
+
+      expect(config._commands.size).to.equal(0)
+    })
+
+    it('does nothing when no command id is given', async () => {
+      await writeCapabilityStore(testCacheDir, {commands: ['help'], skills: ['review']})
+
+      const config = makeConfig()
       await registerCapabilityCommands(config as any)
 
       expect(config._commands.size).to.equal(0)
+    })
+
+    it('registers when accessing the bare command/skill topics', async () => {
+      await writeCapabilityStore(testCacheDir, {commands: ['help'], skills: ['review']})
+
+      const config = makeConfig()
+      await registerCapabilityCommands(config as any, 'claude:command')
+
+      expect(config._commands.has('claude:command:help')).to.be.true
+      expect(config._commands.has('claude:skill:review')).to.be.true
+    })
+
+    it('registers for direct by-name invocation (claude command <name>)', async () => {
+      await writeCapabilityStore(testCacheDir, {commands: ['help'], skills: ['review']})
+
+      const config = makeConfig()
+      await registerCapabilityCommands(config as any, 'claude:command:help')
+
+      expect(config._commands.has('claude:command:help')).to.be.true
     })
 
     it('never replaces existing commands or topics', async () => {
@@ -129,7 +166,7 @@ describe('capability-commands', () => {
       config._commands.set('claude:command:run', builtIn)
       config._topics.set('claude:skill:auth', {name: 'claude:skill:auth'})
 
-      await registerCapabilityCommands(config as any)
+      await registerCapabilityCommands(config as any, 'claude:list')
 
       expect(config._commands.get('claude:command:run')).to.equal(builtIn)
       expect(config._commands.has('claude:skill:auth')).to.be.false
@@ -142,7 +179,7 @@ describe('capability-commands', () => {
       })
 
       const config = makeConfig()
-      await registerCapabilityCommands(config as any)
+      await registerCapabilityCommands(config as any, 'claude:list')
 
       expect([...config._commands.keys()]).to.have.members([
         'claude:skill:sentry:sentry-go-sdk',
@@ -168,7 +205,7 @@ describe('capability-commands', () => {
       const existing = {description: 'built-in', name: 'claude:skill:sentry'}
       config._topics.set('claude:skill:sentry', existing)
 
-      await registerCapabilityCommands(config as any)
+      await registerCapabilityCommands(config as any, 'claude:list')
 
       expect(config._topics.get('claude:skill:sentry')).to.equal(existing)
     })
@@ -177,7 +214,7 @@ describe('capability-commands', () => {
       await writeCapabilityStore(testCacheDir, {commands: [], skills: ['sentry:sentry-go-sdk', 'sentry']})
 
       const config = makeConfig()
-      await registerCapabilityCommands(config as any)
+      await registerCapabilityCommands(config as any, 'claude:list')
 
       expect(config._commands.has('claude:skill:sentry')).to.be.true
       expect(config._commands.has('claude:skill:sentry:sentry-go-sdk')).to.be.true
@@ -188,7 +225,7 @@ describe('capability-commands', () => {
       await writeCapabilityStore(testCacheDir, {commands: [], skills: ['review']})
 
       const config = makeConfig()
-      await registerCapabilityCommands(config as any)
+      await registerCapabilityCommands(config as any, 'claude:list')
 
       const CmdClass = await config._commands.get('claude:skill:review').load()
       const runCommandStub = stub().resolves()
@@ -203,7 +240,7 @@ describe('capability-commands', () => {
       await writeCapabilityStore(testCacheDir, {commands: ['/compact'], skills: []})
 
       const config = makeConfig()
-      await registerCapabilityCommands(config as any)
+      await registerCapabilityCommands(config as any, 'claude:list')
 
       const CmdClass = await config._commands.get('claude:command:compact').load()
       const runCommandStub = stub().resolves()

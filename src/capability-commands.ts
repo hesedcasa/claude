@@ -6,6 +6,7 @@ import {default as path} from 'node:path'
 
 const STORE_FILE = 'capabilities.json'
 const TOPIC = 'claude'
+const LIST_COMMAND_ID = `${TOPIC}:list`
 
 export type CapabilityKind = 'command' | 'skill'
 
@@ -202,13 +203,33 @@ function registerNamespaceTopics(
 }
 
 /**
+ * Reading the cache and building a Command class per entry is only useful
+ * when the invoked command actually cares about the capability list: the
+ * `claude list`/`claude command`/`claude skill` index commands (which list
+ * skills and slash commands), their `run` subcommands, and direct by-name
+ * invocation (`claude command <name>` / `claude skill <name>`). Every other
+ * command (ask, auth, workspace, session, prompt, the root chat) never looks
+ * at dynamic capability commands, so registering for them is wasted work.
+ */
+function isCapabilityAccessId(id: string | undefined): boolean {
+  if (!id) return false
+  if (id === LIST_COMMAND_ID) return true
+
+  return (['command', 'skill'] as const).some((kind) => id === `${TOPIC}:${kind}` || id.startsWith(`${TOPIC}:${kind}:`))
+}
+
+/**
  * Reads the capabilities cache and injects one oclif command per skill and
  * slash command into the Config's internal `_commands` map, making them
  * visible in `help` and invocable as `claude command <name> [input] [flags]`
  * (slash commands) or `claude skill <name> [input] [flags]` (skills).
  * Built-in commands and topics always win: existing ids are never replaced.
+ * A no-op unless `commandId` is within the list/command/skill surface — see
+ * `isCapabilityAccessId`.
  */
-export async function registerCapabilityCommands(config: Config): Promise<void> {
+export async function registerCapabilityCommands(config: Config, commandId?: string): Promise<void> {
+  if (!isCapabilityAccessId(commandId)) return
+
   const store = await readCapabilityStore(config.cacheDir)
   if (!store) return
 
