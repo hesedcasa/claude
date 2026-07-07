@@ -27,7 +27,7 @@ $ npm install -g @hesed/claude
 $ claude COMMAND
 running command...
 $ claude (--version)
-@hesed/claude/0.3.0 darwin-arm64 node-v22.22.3
+@hesed/claude/0.4.0 linux-x64 node-v22.23.1
 $ claude --help [COMMAND]
 USAGE
   $ claude COMMAND
@@ -65,9 +65,9 @@ Built-in commands and topics (`ask`, `run`, `list`, `auth`, `workspace`) always 
 * [`claude claude list mcp-servers`](#claude-claude-list-mcp-servers)
 * [`claude claude list tools`](#claude-claude-list-tools)
 * [`claude claude prompt`](#claude-claude-prompt)
-* [`claude claude prompt add [NAME] [BODY]`](#claude-claude-prompt-add-name-body)
+* [`claude claude prompt add NAME BODY`](#claude-claude-prompt-add-name-body)
 * [`claude claude prompt delete NAME`](#claude-claude-prompt-delete-name)
-* [`claude claude prompt edit [NAME] [BODY]`](#claude-claude-prompt-edit-name-body)
+* [`claude claude prompt edit NAME [BODY]`](#claude-claude-prompt-edit-name-body)
 * [`claude claude prompt rm NAME`](#claude-claude-prompt-rm-name)
 * [`claude claude prompt run NAME`](#claude-claude-prompt-run-name)
 * [`claude claude prompt show NAME`](#claude-claude-prompt-show-name)
@@ -125,7 +125,7 @@ EXAMPLES
   echo "Explain the auth flow" | claude claude
 ```
 
-_See code: [src/commands/claude/index.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/index.ts)_
+_See code: [src/commands/claude/index.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/index.ts)_
 
 ## `claude claude ask PROMPT`
 
@@ -168,7 +168,7 @@ EXAMPLES
   $ claude claude ask "Try another approach" --resume 4f8b6f2a-1234-4c56-8d90-abcdef012345 --fork-session
 ```
 
-_See code: [src/commands/claude/ask.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/ask.ts)_
+_See code: [src/commands/claude/ask.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/ask.ts)_
 
 ## `claude claude auth add`
 
@@ -176,16 +176,15 @@ Add Claude Agent SDK authentication
 
 ```
 USAGE
-  $ claude claude auth add [--json] [-p <value>] [-k <value>] [-u <value>] [--opus <value>] [--sonnet <value>]
-    [--haiku <value>]
+  $ claude claude auth add -p <value> -k <value> -u <value> --opus <value> --sonnet <value> --haiku <value> [--json]
 
 FLAGS
-  -k, --apiKey=<value>   Anthropic API key
-  -p, --profile=<value>  Profile name
-  -u, --apiUrl=<value>   Anthropic API base URL (blank for default)
-      --haiku=<value>    Haiku model ID override
-      --opus=<value>     Opus model ID override
-      --sonnet=<value>   Sonnet model ID override
+  -k, --apiKey=<value>   (required) Anthropic API key
+  -p, --profile=<value>  (required) Profile name
+  -u, --apiUrl=<value>   (required) Anthropic API base URL (blank for default)
+      --haiku=<value>    (required) Haiku model ID override
+      --opus=<value>     (required) Opus model ID override
+      --sonnet=<value>   (required) Sonnet model ID override
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -199,7 +198,7 @@ EXAMPLES
   $ claude claude auth add -p prod
 ```
 
-_See code: [src/commands/claude/auth/add.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/auth/add.ts)_
+_See code: [src/commands/claude/auth/add.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/auth/add.ts)_
 
 ## `claude claude auth delete`
 
@@ -224,7 +223,7 @@ EXAMPLES
   $ claude claude auth delete -p prod
 ```
 
-_See code: [src/commands/claude/auth/delete.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/auth/delete.ts)_
+_See code: [src/commands/claude/auth/delete.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/auth/delete.ts)_
 
 ## `claude claude auth list`
 
@@ -244,7 +243,7 @@ EXAMPLES
   $ claude claude auth list
 ```
 
-_See code: [src/commands/claude/auth/list.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/auth/list.ts)_
+_See code: [src/commands/claude/auth/list.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/auth/list.ts)_
 
 ## `claude claude auth profile`
 
@@ -269,7 +268,7 @@ EXAMPLES
   $ claude claude auth profile --default test
 ```
 
-_See code: [src/commands/claude/auth/profile.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/auth/profile.ts)_
+_See code: [src/commands/claude/auth/profile.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/auth/profile.ts)_
 
 ## `claude claude auth test`
 
@@ -294,7 +293,7 @@ EXAMPLES
   $ claude claude auth test -p prod
 ```
 
-_See code: [src/commands/claude/auth/test.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/auth/test.ts)_
+_See code: [src/commands/claude/auth/test.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/auth/test.ts)_
 
 ## `claude claude auth update`
 
@@ -302,16 +301,15 @@ Update Claude Agent SDK authentication
 
 ```
 USAGE
-  $ claude claude auth update [--json] [-p <value>] [-k <value>] [-u <value>] [--opus <value>] [--sonnet <value>]
-    [--haiku <value>]
+  $ claude claude auth update -p <value> -k <value> -u <value> --opus <value> --sonnet <value> --haiku <value> [--json]
 
 FLAGS
-  -k, --apiKey=<value>   Anthropic API key
-  -p, --profile=<value>  Profile name
-  -u, --apiUrl=<value>   Anthropic API base URL (blank for default)
-      --haiku=<value>    Haiku model ID override
-      --opus=<value>     Opus model ID override
-      --sonnet=<value>   Sonnet model ID override
+  -k, --apiKey=<value>   (required) Anthropic API key
+  -p, --profile=<value>  (required) Profile name
+  -u, --apiUrl=<value>   (required) Anthropic API base URL (blank for default)
+      --haiku=<value>    (required) Haiku model ID override
+      --opus=<value>     (required) Opus model ID override
+      --sonnet=<value>   (required) Sonnet model ID override
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -325,7 +323,7 @@ EXAMPLES
   $ claude claude auth update -p test
 ```
 
-_See code: [src/commands/claude/auth/update.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/auth/update.ts)_
+_See code: [src/commands/claude/auth/update.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/auth/update.ts)_
 
 ## `claude claude command`
 
@@ -342,7 +340,7 @@ EXAMPLES
   $ claude claude command
 ```
 
-_See code: [src/commands/claude/command/index.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/command/index.ts)_
+_See code: [src/commands/claude/command/index.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/command/index.ts)_
 
 ## `claude claude command run NAME [INPUT]`
 
@@ -380,7 +378,7 @@ EXAMPLES
   $ claude claude command run review "this repo" --workspace proj01
 ```
 
-_See code: [src/commands/claude/command/run.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/command/run.ts)_
+_See code: [src/commands/claude/command/run.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/command/run.ts)_
 
 ## `claude claude list`
 
@@ -406,7 +404,7 @@ EXAMPLES
   $ claude claude list --workspace proj01
 ```
 
-_See code: [src/commands/claude/list/index.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/list/index.ts)_
+_See code: [src/commands/claude/list/index.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/list/index.ts)_
 
 ## `claude claude list agents`
 
@@ -430,7 +428,7 @@ EXAMPLES
   $ claude claude list agents
 ```
 
-_See code: [src/commands/claude/list/agents.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/list/agents.ts)_
+_See code: [src/commands/claude/list/agents.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/list/agents.ts)_
 
 ## `claude claude list mcp-servers`
 
@@ -454,7 +452,7 @@ EXAMPLES
   $ claude claude list mcp-servers
 ```
 
-_See code: [src/commands/claude/list/mcp-servers.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/list/mcp-servers.ts)_
+_See code: [src/commands/claude/list/mcp-servers.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/list/mcp-servers.ts)_
 
 ## `claude claude list tools`
 
@@ -478,7 +476,7 @@ EXAMPLES
   $ claude claude list tools
 ```
 
-_See code: [src/commands/claude/list/tools.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/list/tools.ts)_
+_See code: [src/commands/claude/list/tools.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/list/tools.ts)_
 
 ## `claude claude prompt`
 
@@ -495,19 +493,19 @@ EXAMPLES
   $ claude claude prompt
 ```
 
-_See code: [src/commands/claude/prompt/index.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/prompt/index.ts)_
+_See code: [src/commands/claude/prompt/index.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/prompt/index.ts)_
 
-## `claude claude prompt add [NAME] [BODY]`
+## `claude claude prompt add NAME BODY`
 
 Create a saved prompt
 
 ```
 USAGE
-  $ claude claude prompt add [NAME] [BODY] [-d <value>] [-s <value>]
+  $ claude claude prompt add NAME BODY [-d <value>] [-s <value>]
 
 ARGUMENTS
-  [NAME]  Prompt name
-  [BODY]  Prompt text to save
+  NAME  Prompt name
+  BODY  Prompt text to save
 
 FLAGS
   -d, --description=<value>  Short prompt description
@@ -526,7 +524,7 @@ EXAMPLES
   $ claude claude prompt add
 ```
 
-_See code: [src/commands/claude/prompt/add.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/prompt/add.ts)_
+_See code: [src/commands/claude/prompt/add.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/prompt/add.ts)_
 
 ## `claude claude prompt delete NAME`
 
@@ -554,18 +552,18 @@ EXAMPLES
   $ claude claude prompt delete summarize --force
 ```
 
-_See code: [src/commands/claude/prompt/delete.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/prompt/delete.ts)_
+_See code: [src/commands/claude/prompt/delete.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/prompt/delete.ts)_
 
-## `claude claude prompt edit [NAME] [BODY]`
+## `claude claude prompt edit NAME [BODY]`
 
 Edit a saved prompt
 
 ```
 USAGE
-  $ claude claude prompt edit [NAME] [BODY] [-d <value>] [-f] [-s <value>]
+  $ claude claude prompt edit NAME [BODY] [-d <value>] [-f] [-s <value>]
 
 ARGUMENTS
-  [NAME]  Prompt name
+  NAME    Prompt name
   [BODY]  Replacement prompt text
 
 FLAGS
@@ -586,7 +584,7 @@ EXAMPLES
   $ claude claude prompt edit summarize
 ```
 
-_See code: [src/commands/claude/prompt/edit.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/prompt/edit.ts)_
+_See code: [src/commands/claude/prompt/edit.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/prompt/edit.ts)_
 
 ## `claude claude prompt rm NAME`
 
@@ -657,7 +655,7 @@ EXAMPLES
   $ claude claude prompt run summarize --debug
 ```
 
-_See code: [src/commands/claude/prompt/run.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/prompt/run.ts)_
+_See code: [src/commands/claude/prompt/run.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/prompt/run.ts)_
 
 ## `claude claude prompt show NAME`
 
@@ -677,7 +675,7 @@ EXAMPLES
   $ claude claude prompt show summarize
 ```
 
-_See code: [src/commands/claude/prompt/show.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/prompt/show.ts)_
+_See code: [src/commands/claude/prompt/show.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/prompt/show.ts)_
 
 ## `claude claude run NAME [INPUT]`
 
@@ -715,7 +713,7 @@ EXAMPLES
   $ claude claude run review "this repo" --workspace proj01
 ```
 
-_See code: [src/commands/claude/run.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/run.ts)_
+_See code: [src/commands/claude/run.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/run.ts)_
 
 ## `claude claude session`
 
@@ -742,7 +740,7 @@ EXAMPLES
   $ claude claude session --dir ~/code/repo-a --limit 10
 ```
 
-_See code: [src/commands/claude/session/index.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/session/index.ts)_
+_See code: [src/commands/claude/session/index.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/session/index.ts)_
 
 ## `claude claude session delete SESSIONID`
 
@@ -768,7 +766,7 @@ EXAMPLES
   $ claude claude session delete 4f8b6f2a-1234-4c56-8d90-abcdef012345 --force
 ```
 
-_See code: [src/commands/claude/session/delete.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/session/delete.ts)_
+_See code: [src/commands/claude/session/delete.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/session/delete.ts)_
 
 ## `claude claude session fork SESSIONID`
 
@@ -794,7 +792,7 @@ EXAMPLES
   $ claude claude session fork 4f8b6f2a-1234-4c56-8d90-abcdef012345 --title "OAuth2 spike"
 ```
 
-_See code: [src/commands/claude/session/fork.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/session/fork.ts)_
+_See code: [src/commands/claude/session/fork.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/session/fork.ts)_
 
 ## `claude claude session rename SESSIONID TITLE`
 
@@ -818,7 +816,7 @@ EXAMPLES
   $ claude claude session rename 4f8b6f2a-1234-4c56-8d90-abcdef012345 "Auth refactor"
 ```
 
-_See code: [src/commands/claude/session/rename.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/session/rename.ts)_
+_See code: [src/commands/claude/session/rename.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/session/rename.ts)_
 
 ## `claude claude session resume SESSIONID PROMPT`
 
@@ -848,7 +846,7 @@ EXAMPLES
   $ claude claude session resume 4f8b6f2a-1234-4c56-8d90-abcdef012345 "Try OAuth2 instead" --fork
 ```
 
-_See code: [src/commands/claude/session/resume.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/session/resume.ts)_
+_See code: [src/commands/claude/session/resume.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/session/resume.ts)_
 
 ## `claude claude session show SESSIONID`
 
@@ -878,7 +876,7 @@ EXAMPLES
   $ claude claude session show 4f8b6f2a-1234-4c56-8d90-abcdef012345 --messages --limit 20
 ```
 
-_See code: [src/commands/claude/session/show.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/session/show.ts)_
+_See code: [src/commands/claude/session/show.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/session/show.ts)_
 
 ## `claude claude session tag SESSIONID [TAG]`
 
@@ -905,7 +903,7 @@ EXAMPLES
   $ claude claude session tag 4f8b6f2a-1234-4c56-8d90-abcdef012345 --clear
 ```
 
-_See code: [src/commands/claude/session/tag.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/session/tag.ts)_
+_See code: [src/commands/claude/session/tag.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/session/tag.ts)_
 
 ## `claude claude skill`
 
@@ -922,7 +920,7 @@ EXAMPLES
   $ claude claude skill
 ```
 
-_See code: [src/commands/claude/skill/index.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/skill/index.ts)_
+_See code: [src/commands/claude/skill/index.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/skill/index.ts)_
 
 ## `claude claude skill run NAME [INPUT]`
 
@@ -958,7 +956,7 @@ EXAMPLES
   $ claude claude skill run review "this repo" --workspace proj01
 ```
 
-_See code: [src/commands/claude/skill/run.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/skill/run.ts)_
+_See code: [src/commands/claude/skill/run.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/skill/run.ts)_
 
 ## `claude claude workspace add`
 
@@ -966,13 +964,13 @@ Add a workspace with named repository directories
 
 ```
 USAGE
-  $ claude claude workspace add [--json] [--mode local|sandbox] [--repo <value>...] [-w <value>]
+  $ claude claude workspace add --mode local|sandbox --repo <value>... -w <value> [--json]
 
 FLAGS
-  -w, --workspace=<value>  Workspace name
-      --mode=<option>      'local' uses real repo dirs; 'sandbox' clones git URLs into a virtual bash
+  -w, --workspace=<value>  (required) Workspace name
+      --mode=<option>      (required) 'local' uses real repo dirs; 'sandbox' clones git URLs into a virtual bash
                            <options: local|sandbox>
-      --repo=<value>...    Named repo entry as name=path or name=git-url (repeatable)
+      --repo=<value>...    (required) Named repo entry as name=path or name=git-url (repeatable)
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -986,7 +984,7 @@ EXAMPLES
   $ claude claude workspace add --workspace proj02 --mode sandbox --repo repo01=https://github.com/org/repo01.git
 ```
 
-_See code: [src/commands/claude/workspace/add.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/workspace/add.ts)_
+_See code: [src/commands/claude/workspace/add.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/workspace/add.ts)_
 
 ## `claude claude workspace default`
 
@@ -1011,7 +1009,7 @@ EXAMPLES
   $ claude claude workspace default --set proj01
 ```
 
-_See code: [src/commands/claude/workspace/default.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/workspace/default.ts)_
+_See code: [src/commands/claude/workspace/default.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/workspace/default.ts)_
 
 ## `claude claude workspace delete`
 
@@ -1019,10 +1017,10 @@ Delete a workspace or remove a repo from a workspace
 
 ```
 USAGE
-  $ claude claude workspace delete [--json] [-w <value>]
+  $ claude claude workspace delete -w <value> [--json]
 
 FLAGS
-  -w, --workspace=<value>  Workspace name
+  -w, --workspace=<value>  (required) Workspace name
 
 GLOBAL FLAGS
   --json  Format output as json.
@@ -1034,7 +1032,7 @@ EXAMPLES
   $ claude claude workspace delete --workspace proj01
 ```
 
-_See code: [src/commands/claude/workspace/delete.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/workspace/delete.ts)_
+_See code: [src/commands/claude/workspace/delete.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/workspace/delete.ts)_
 
 ## `claude claude workspace list`
 
@@ -1054,7 +1052,7 @@ EXAMPLES
   $ claude claude workspace list
 ```
 
-_See code: [src/commands/claude/workspace/list.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/workspace/list.ts)_
+_See code: [src/commands/claude/workspace/list.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/workspace/list.ts)_
 
 ## `claude claude workspace update`
 
@@ -1086,5 +1084,5 @@ EXAMPLES
   $ claude claude workspace update --workspace proj01 --mode sandbox
 ```
 
-_See code: [src/commands/claude/workspace/update.ts](https://github.com/hesedcasa/claude/blob/v0.3.0/src/commands/claude/workspace/update.ts)_
+_See code: [src/commands/claude/workspace/update.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/workspace/update.ts)_
 <!-- commandsstop -->
