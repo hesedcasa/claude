@@ -14,21 +14,21 @@ describe('init hook: register-capability-commands', () => {
     hook = imported.default
   }
 
-  it('registers capability commands with the config', async () => {
+  it('registers capability commands with the config and invoked command id', async () => {
     registerStub = stub().resolves()
     await loadHook()
 
     const config = {cacheDir: '/tmp/test-cache'}
-    await hook.call({} as any, {config} as any)
+    await hook.call({} as any, {config, id: 'claude:list'} as any)
 
-    expect(registerStub.calledOnceWith(config)).to.be.true
+    expect(registerStub.calledOnceWith(config, 'claude:list')).to.be.true
   })
 
   it('swallows registration errors so the CLI still starts', async () => {
     registerStub = stub().rejects(new Error('boom'))
     await loadHook()
 
-    await hook.call({} as any, {config: {}} as any)
+    await hook.call({} as any, {config: {}, id: 'claude:list'} as any)
 
     expect(registerStub.calledOnce).to.be.true
   })
