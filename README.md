@@ -16,6 +16,7 @@ sdkck plugins install @hesed/claude
 * [Install](#install)
 * [Usage](#usage)
 * [Running skills and slash commands directly](#running-skills-and-slash-commands-directly)
+* [Talking to other AI agents over ACP](#talking-to-other-ai-agents-over-acp)
 * [Commands](#commands)
 <!-- tocstop -->
 
@@ -27,7 +28,7 @@ $ npm install -g @hesed/claude
 $ claude COMMAND
 running command...
 $ claude (--version)
-@hesed/claude/0.4.0 linux-x64 node-v22.23.1
+@hesed/claude/0.4.0 linux-x64 node-v22.22.2
 $ claude --help [COMMAND]
 USAGE
   $ claude COMMAND
@@ -47,10 +48,57 @@ $ claude claude review "this repo" -w proj01   # flags are forwarded to run
 
 Built-in commands and topics (`ask`, `run`, `list`, `auth`, `workspace`) always take precedence; only unknown names are dispatched to `run`. Quote multi-word input — unquoted words after the name are re-joined before being passed to the agent.
 
+# Talking to other AI agents over ACP
+
+The [Agent Client Protocol](https://agentclientprotocol.com) (ACP) is a JSON-RPC protocol spoken over stdio between a *client* (a code editor, or another agent driving one) and a coding *agent*. This CLI implements both halves.
+
+## Driving another agent
+
+Register a peer agent once, then send it prompts:
+
+```sh-session
+$ claude claude acp add gemini gemini --arg --experimental-acp
+$ claude claude acp add peer claude --arg acp --arg serve
+$ claude claude acp                                   # list registered peers
+
+$ claude claude acp prompt gemini "Summarise this repo's architecture"
+$ claude claude acp prompt gemini "What changed?" --json
+```
+
+The peer's assistant text streams to stdout as it arrives, with its tool calls and permission decisions noted inline. The final line reports the stop reason and the peer's session ID, which `--session` resumes on a peer that supports it:
+
+```sh-session
+$ claude claude acp prompt gemini "And the tests?" --session 019c0f2a-1234-4c56-8d90-abcdef012345
+```
+
+A one-off peer needs no registration:
+
+```sh-session
+$ claude claude acp prompt tmp "Hello" --command gemini --arg --experimental-acp
+```
+
+**Permissions.** When the peer asks to run a tool, this CLI answers from `--permission` (`allow`, the default, or `reject`), always choosing the one-shot option so an answer never carries into later turns. The peer may also read and write files through this CLI; `--read-only` withdraws the write capability. The peer is a subprocess and runs with your own file permissions, so only register agents you trust.
+
+## Being driven by another agent
+
+`claude acp serve` exposes the Claude agent over ACP on stdio, for a code editor or another agent to drive:
+
+```sh-session
+$ claude claude acp serve --profile work --model opus
+```
+
+It supports `session/new`, multi-turn `session/prompt` (each turn resumes the session the previous turn created), `session/cancel`, and `session/load` for replaying a stored session transcript. Assistant text, tool calls, and tool results are streamed as `session/update` notifications, and MCP servers the client attaches to a session are passed through to the agent. stdout carries protocol traffic only — all diagnostics go to stderr.
+
 # Commands
 
 <!-- commands -->
 * [`claude claude [PROMPT]`](#claude-claude-prompt)
+* [`claude claude acp`](#claude-claude-acp)
+* [`claude claude acp add NAME COMMAND`](#claude-claude-acp-add-name-command)
+* [`claude claude acp delete NAME`](#claude-claude-acp-delete-name)
+* [`claude claude acp prompt AGENT PROMPT`](#claude-claude-acp-prompt-agent-prompt)
+* [`claude claude acp rm NAME`](#claude-claude-acp-rm-name)
+* [`claude claude acp serve`](#claude-claude-acp-serve)
 * [`claude claude ask PROMPT`](#claude-claude-ask-prompt)
 * [`claude claude auth add`](#claude-claude-auth-add)
 * [`claude claude auth delete`](#claude-claude-auth-delete)
@@ -126,6 +174,178 @@ EXAMPLES
 ```
 
 _See code: [src/commands/claude/index.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/index.ts)_
+
+## `claude claude acp`
+
+List registered peer ACP agents
+
+```
+USAGE
+  $ claude claude acp [--json]
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  List registered peer ACP agents
+
+EXAMPLES
+  $ claude claude acp
+```
+
+_See code: [src/commands/claude/acp/index.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/acp/index.ts)_
+
+## `claude claude acp add NAME COMMAND`
+
+Register a peer ACP agent this CLI can talk to
+
+```
+USAGE
+  $ claude claude acp add NAME COMMAND [--arg <value>...] [--cwd <value>] [--env <value>...]
+
+ARGUMENTS
+  NAME     Name to register the peer agent under
+  COMMAND  Executable that speaks ACP over stdio
+
+FLAGS
+  --arg=<value>...  Argument passed to the peer agent command (repeatable, order preserved)
+  --cwd=<value>     Working directory to start the peer agent in
+  --env=<value>...  Environment variable for the peer agent as KEY=value (repeatable)
+
+DESCRIPTION
+  Register a peer ACP agent this CLI can talk to
+
+EXAMPLES
+  $ claude claude acp add gemini gemini --arg --experimental-acp
+
+  $ claude claude acp add claude-peer claude --arg acp --arg serve
+
+  $ claude claude acp add local ./my-agent --cwd ~/code/project --env DEBUG=1
+```
+
+_See code: [src/commands/claude/acp/add.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/acp/add.ts)_
+
+## `claude claude acp delete NAME`
+
+Delete a registered peer ACP agent
+
+```
+USAGE
+  $ claude claude acp delete NAME [-f]
+
+ARGUMENTS
+  NAME  Registered ACP agent name
+
+FLAGS
+  -f, --force  Skip the confirmation prompt
+
+DESCRIPTION
+  Delete a registered peer ACP agent
+
+ALIASES
+  $ claude claude acp rm
+
+EXAMPLES
+  $ claude claude acp delete gemini
+
+  $ claude claude acp delete gemini --force
+```
+
+_See code: [src/commands/claude/acp/delete.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/acp/delete.ts)_
+
+## `claude claude acp prompt AGENT PROMPT`
+
+Send a prompt to another AI agent over the Agent Client Protocol (ACP)
+
+```
+USAGE
+  $ claude claude acp prompt AGENT PROMPT [--json] [--arg <value>...] [-c <value>] [--cwd <value>] [--env <value>...]
+    [--permission allow|reject] [--read-only] [--session <value>]
+
+ARGUMENTS
+  AGENT   Registered ACP agent name (see `claude acp`)
+  PROMPT  Prompt to send to the peer agent
+
+FLAGS
+  -c, --command=<value>      Peer agent command, instead of looking the name up in the registry
+      --arg=<value>...       Argument for the peer agent command (repeatable, used with --command)
+      --cwd=<value>          Working directory the peer agent should operate in
+      --env=<value>...       Environment variable for the peer agent as KEY=value (repeatable)
+      --permission=<option>  [default: allow] How to answer the peer's tool permission requests
+                             <options: allow|reject>
+      --read-only            Do not let the peer agent write files through this CLI
+      --session=<value>      Peer session ID to resume instead of starting a new one
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Send a prompt to another AI agent over the Agent Client Protocol (ACP)
+
+EXAMPLES
+  $ claude claude acp prompt gemini "Summarise the architecture of this repo"
+
+  $ claude claude acp prompt peer "Review my changes" --session 019c0f2a-1234-4c56-8d90-abcdef012345
+
+  $ claude claude acp prompt peer "What changed?" --permission reject --read-only
+
+  $ claude claude acp prompt inline "Hello" --command gemini --arg --experimental-acp
+```
+
+_See code: [src/commands/claude/acp/prompt.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/acp/prompt.ts)_
+
+## `claude claude acp rm NAME`
+
+Delete a registered peer ACP agent
+
+```
+USAGE
+  $ claude claude acp rm NAME [-f]
+
+ARGUMENTS
+  NAME  Registered ACP agent name
+
+FLAGS
+  -f, --force  Skip the confirmation prompt
+
+DESCRIPTION
+  Delete a registered peer ACP agent
+
+ALIASES
+  $ claude claude acp rm
+
+EXAMPLES
+  $ claude claude acp rm gemini
+
+  $ claude claude acp rm gemini --force
+```
+
+## `claude claude acp serve`
+
+Serve the Claude agent over the Agent Client Protocol (ACP) on stdio
+
+```
+USAGE
+  $ claude claude acp serve [--allow-tools <value>] [-m <value>] [-p <value>] [--system <value>]
+
+FLAGS
+  -m, --model=<value>        Model to use (e.g. opus, or a full model ID)
+  -p, --profile=<value>      Authentication profile name
+      --allow-tools=<value>  Comma-separated list of tools the agent may use (default: all available)
+      --system=<value>       Custom system prompt for the agent
+
+DESCRIPTION
+  Serve the Claude agent over the Agent Client Protocol (ACP) on stdio
+
+EXAMPLES
+  $ claude claude acp serve
+
+  $ claude claude acp serve --profile work --model opus
+
+  $ claude claude acp serve --allow-tools Read,Glob,Grep
+```
+
+_See code: [src/commands/claude/acp/serve.ts](https://github.com/hesedcasa/claude/blob/v0.4.0/src/commands/claude/acp/serve.ts)_
 
 ## `claude claude ask PROMPT`
 

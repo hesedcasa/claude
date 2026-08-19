@@ -34,19 +34,37 @@ export interface AgentConfig {
 export type SandboxExecFn = (command: string) => Promise<{exitCode: number; stderr: string; stdout: string}>
 
 export interface AskOptions {
+  /** Aborts the underlying agent run (used by ACP `session/cancel`). */
+  abortController?: AbortController
   additionalDirectories?: string[]
   allowedTools?: string[]
   continueSession?: boolean
   cwd?: string
   forkSession?: boolean
+  /** External MCP servers to expose to the run, keyed by server name. */
+  mcpServers?: Record<string, McpServerConfig>
   model?: string
   onText?: (text: string) => void
-  onToolUse?: (toolName: string) => void
+  onToolResult?: (result: ToolResultEvent) => void
+  onToolUse?: (toolName: string, details?: ToolUseEvent) => void
   resume?: string
   sandboxExec?: SandboxExecFn
   sandboxFs?: SandboxFs
   skills?: 'all' | string[]
   systemPrompt?: string
+}
+
+/** A tool-use block emitted by the model, as seen on an assistant message. */
+export interface ToolUseEvent {
+  id?: string
+  input?: Record<string, unknown>
+}
+
+/** The result of a tool call, as reported back on the following user message. */
+export interface ToolResultEvent {
+  content?: string
+  isError?: boolean
+  toolUseId: string
 }
 
 export interface ChatOptions extends AskOptions {
@@ -82,6 +100,15 @@ interface ChatResult {
   result: string
   sessionId?: string
   toolsUsed: string[]
+  usage?: UsageSummary
+}
+
+interface AskState {
+  errorSubtype?: string
+  finalText: string
+  model?: string
+  resultSeen: boolean
+  sessionId?: string
   usage?: UsageSummary
 }
 
@@ -139,13 +166,29 @@ interface SandboxTooling {
  * and any explicit allow-list is extended to include them.
  */
 function resolveToolOptions(options?: AskOptions): SandboxTooling {
-  if (!options?.sandboxExec) return {allowedTools: options?.allowedTools}
+  if (!options?.sandboxExec) return {allowedTools: options?.allowedTools, mcpServers: options?.mcpServers}
 
   const sandbox = buildSandboxTooling(options.sandboxExec, options.sandboxFs)
   const registeredTools = options.sandboxFs ? SANDBOX_TOOLS : [SANDBOX_BASH_TOOL]
   const allowedTools = options.allowedTools === undefined ? undefined : [...options.allowedTools, ...registeredTools]
 
-  return {...sandbox, allowedTools}
+  // Caller-supplied servers come first so the sandbox server always wins its name.
+  return {...sandbox, allowedTools, mcpServers: {...options.mcpServers, ...sandbox.mcpServers}}
+}
+
+/**
+ * Flatten a `tool_result` block's body into plain text. The SDK sends
+ * either a bare string or an array of content blocks.
+ */
+function flattenToolResultContent(body: unknown): string | undefined {
+  if (typeof body === 'string') return body
+  if (!Array.isArray(body)) return undefined
+
+  const parts = body
+    .filter((block): block is {text: string} => Boolean(block) && typeof (block as {text?: unknown}).text === 'string')
+    .map((block) => block.text)
+
+  return parts.length > 0 ? parts.join('\n') : undefined
 }
 
 /**
@@ -314,6 +357,7 @@ export class AgentApi {
 
       const iterator = this.queryFn({
         options: {
+          abortController: options?.abortController,
           additionalDirectories: options?.additionalDirectories,
           allowedTools: toolOptions.allowedTools,
           continue: options?.continueSession,
@@ -332,38 +376,49 @@ export class AgentApi {
       })
 
       const toolsUsed: string[] = []
-      let finalText = ''
-      let model: string | undefined
-      let sessionId: string | undefined
-      let usage: undefined | UsageSummary
-      let errorSubtype: string | undefined
-      let resultSeen = false
+      const state: AskState = {finalText: '', resultSeen: false}
 
       for await (const message of iterator as AsyncIterable<SDKMessage>) {
-        if (message.type === 'assistant') {
-          this.handleAssistantMessage(message, toolsUsed, options)
-        } else if (message.type === 'result') {
-          resultSeen = true
-          sessionId = message.session_id
-          if (message.subtype === 'success') {
-            finalText = message.result
-            model = Object.keys(message.modelUsage ?? {})[0]
-            usage = this.extractUsage(message)
-          } else {
-            errorSubtype = message.subtype
+        switch (message.type) {
+          case 'assistant': {
+            this.handleAssistantMessage(message, toolsUsed, options)
+            break
+          }
+
+          case 'result': {
+            this.handleAskResult(message, state)
+            break
+          }
+
+          case 'user': {
+            this.handleUserMessage(message, options)
+            break
+          }
+
+          default: {
+            break
           }
         }
       }
 
-      if (errorSubtype) {
-        return {error: `Agent run ended with subtype: ${errorSubtype}`, success: false}
+      if (state.errorSubtype) {
+        return {error: `Agent run ended with subtype: ${state.errorSubtype}`, success: false}
       }
 
-      if (!resultSeen) {
+      if (!state.resultSeen) {
         return {error: 'Agent run completed without a result message', success: false}
       }
 
-      return {data: {model, result: finalText, sessionId, toolsUsed, usage} satisfies AskResult, success: true}
+      return {
+        data: {
+          model: state.model,
+          result: state.finalText,
+          sessionId: state.sessionId,
+          toolsUsed,
+          usage: state.usage,
+        } satisfies AskResult,
+        success: true,
+      }
     } catch (error: unknown) {
       return {error: error instanceof Error ? error.message : String(error), success: false}
     }
@@ -382,6 +437,7 @@ export class AgentApi {
 
       const iterator = this.queryFn({
         options: {
+          abortController: options?.abortController,
           additionalDirectories: options?.additionalDirectories,
           allowedTools: toolOptions.allowedTools,
           continue: options?.continueSession,
@@ -591,6 +647,22 @@ export class AgentApi {
     }
   }
 
+  /**
+   * Fold the run's single result message into the ask state.
+   */
+  private handleAskResult(message: SDKMessage & {type: 'result'}, state: AskState): void {
+    state.resultSeen = true
+    state.sessionId = message.session_id
+
+    if (message.subtype === 'success') {
+      state.finalText = message.result
+      state.model = Object.keys(message.modelUsage ?? {})[0]
+      state.usage = this.extractUsage(message)
+    } else {
+      state.errorSubtype = message.subtype
+    }
+  }
+
   private handleAssistantMessage(
     message: SDKMessage & {type: 'assistant'},
     toolsUsed: string[],
@@ -606,7 +678,11 @@ export class AgentApi {
         options?.onText?.(block.text)
       } else if ('name' in block && typeof block.name === 'string') {
         toolsUsed.push(block.name)
-        options?.onToolUse?.(block.name)
+        const record = block as {id?: unknown; input?: unknown}
+        options?.onToolUse?.(block.name, {
+          id: typeof record.id === 'string' ? record.id : undefined,
+          input: (record.input as Record<string, unknown> | undefined) ?? undefined,
+        })
       }
     }
   }
@@ -633,5 +709,36 @@ export class AgentApi {
     }
 
     options?.onTurnEnd?.(turn)
+  }
+
+  /**
+   * Report tool results back to the caller. The SDK delivers them as
+   * `tool_result` blocks on the user message that follows a tool call,
+   * which is what lets a consumer close out a pending tool call.
+   */
+  private handleUserMessage(message: SDKMessage & {type: 'user'}, options?: AskOptions): void {
+    if (!options?.onToolResult) return
+    const content = message.message?.content
+    if (!Array.isArray(content)) return
+
+    for (const block of content) {
+      if (!block || typeof block !== 'object' || !('tool_use_id' in block)) continue
+      const {
+        content: body,
+        is_error: isError,
+        tool_use_id: toolUseId,
+      } = block as unknown as {
+        content?: unknown
+        is_error?: unknown
+        tool_use_id?: unknown
+      }
+      if (typeof toolUseId !== 'string') continue
+
+      options.onToolResult({
+        content: flattenToolResultContent(body),
+        isError: isError === true,
+        toolUseId,
+      })
+    }
   }
 }

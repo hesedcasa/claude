@@ -35,6 +35,7 @@ npm run find-deadcode
 src/
 ├── commands/claude/       # Oclif CLI commands (user-facing)
 │   ├── index.ts           # Interactive multi-turn chat session (streaming input mode)
+│   ├── acp/               # Agent Client Protocol: index.ts (list peers) + add, delete, prompt, serve
 │   ├── ask.ts             # Send a natural-language prompt to the agent
 │   ├── list/              # List capabilities: index.ts (all) + tools, agents, mcp-servers
 │   ├── command/           # Slash commands: index.ts (list) + run.ts (execute by name, no leading / needed)
@@ -44,6 +45,12 @@ src/
 │   ├── prompt/            # Saved prompts (add, delete/rm, edit, list, run, show)
 │   ├── session/           # Session management (index=list, show, delete, rename, tag, fork, resume)
 │   └── workspace/         # Workspace management (add, default, delete, list, update)
+├── acp/
+│   ├── acp-agent.ts       # ClaudeAcpAgent: the Claude agent exposed as an ACP agent (server role)
+│   ├── acp-client.ts      # AcpPeer: spawns and drives another ACP agent (client role)
+│   ├── acp-config.ts      # Peer agent registry ({command, args, cwd, env}) under acpAgents in claude-config.json
+│   ├── acp-serve.ts       # serveAcpOverStdio: stdio transport wiring for the agent role
+│   └── acp-stream.ts      # nodeStdioStream: node stdio -> ACP newline-delimited JSON transport
 ├── agent/
 │   ├── agent-api.ts       # AgentApi class wrapping claude-agent-sdk query()
 │   ├── agent-client.ts    # Singleton wrapper functions (ask, list, run, runCommand, runSkill, testConnection)
@@ -103,6 +110,9 @@ Config lives at `~/.config/claude/claude-config.json`:
   "workspaces": {
     "proj01": {"mode": "local", "repos": {"repo-a": "~/code/repo-a", "repo-b": "~/code/repo-b"}},
     "proj02": {"mode": "sandbox", "repos": {"repo-c": "https://github.com/org/repo-c.git"}}
+  },
+  "acpAgents": {
+    "gemini": {"command": "gemini", "args": ["--experimental-acp"]}
   }
 }
 ```
@@ -118,7 +128,16 @@ Config lives at `~/.config/claude/claude-config.json`:
 - **`local` mode** — repo paths are real directories: `ask`/`run` build a system prompt listing them, set `cwd` to the common parent (`commonParentDir`), and pass `additionalDirectories` to the SDK. Git URLs are skipped with a hint.
 - **`sandbox` mode** — repos are mounted copy-on-write (just-bash `OverlayFs` under `MountableFs`) at `/workspace/<repoName>` in an in-memory virtual filesystem; git URLs are shallow-cloned into `<dataDir>/workspace-repos` first (`syncGitRepo`). The returned `sandboxExec` is passed to `AgentApi.ask()`, which exposes it as an in-process MCP `bash` tool (`mcp__workspace-bash__bash` via `createSdkMcpServer`) and disallows the built-in `Bash`/`Edit`/`Glob`/`Grep`/`Read`/`Write` tools, so all agent file/shell operations stay inside the sandbox and never touch the real filesystem.
 
-**7. Sessions (session-api.ts + commands/claude/session/):**
+**7. ACP — talking to other AI agents (src/acp/ + commands/claude/acp/):**
+
+The [Agent Client Protocol](https://agentclientprotocol.com) is JSON-RPC 2.0 over newline-delimited stdio, spoken between a _client_ (a code editor, or another agent driving one) and an _agent_. This CLI implements both roles, so it can be driven by other tools and can drive other agents.
+
+- **Agent role — `claude acp serve` (acp-agent.ts + acp-serve.ts):** `serveAcpOverStdio` builds the transport and hands it to the ACP library's `AgentSideConnection` wrapping `ClaudeAcpAgent`. `initialize` negotiates the version (`Math.min` of ours and the client's) and advertises `loadSession`, `mcpCapabilities` (http/sse) and `promptCapabilities.embeddedContext`. `session/new` mints an ACP session id and remembers the client's `cwd` and MCP servers (`toSdkMcpServers` maps ACP `McpServer[]` to the SDK's config). `session/prompt` flattens the prompt's ContentBlocks (`promptToText`) and runs one `ask()` turn, streaming `agent_message_chunk`, `tool_call` and `tool_call_update` notifications from `ask()`'s `onText`/`onToolUse`/`onToolResult` callbacks; the SDK session id from the first turn is stored and passed as `resume` on later turns, so the conversation keeps its history. Notifications are chained onto a single promise (`enqueueUpdate`) because the SDK's callbacks are synchronous while sending is not, and the queue is flushed before the response. `session/cancel` aborts the turn's `AbortController`, which makes the pending prompt answer `stopReason: 'cancelled'`. `session/load` treats the ACP session id as an SDK session id: it checks the session exists via `getAgentSessionInfo` (reading messages for an unknown session returns an empty list, not an error) and replays the transcript as message chunks. **stdout is the protocol channel** — `serve.ts` logs only to stderr.
+- **Client role — `claude acp prompt` (acp-client.ts):** `AcpPeer` spawns the peer program, wraps its stdio in a `ClientSideConnection`, and exposes `start`/`newSession`/`loadSession`/`prompt`/`close`. It answers the peer's `session/request_permission` from a policy (`--permission allow|reject`, preferring the one-shot option kinds so an answer never leaks into later turns) and serves `fs/read_text_file` / `fs/write_text_file` from the real filesystem (`--read-only` withdraws the write capability). Pending requests are tracked in a waiter set so a peer that dies fails them instead of hanging. Peer JSON-RPC failures reject with a plain `{code, message, data}` object rather than an `Error`, so `prompt.ts` formats them before reporting.
+- **Peer registry (acp-config.ts):** named peers live under `acpAgents` in `claude-config.json` alongside profiles and workspaces (`claude acp add gemini gemini --arg --experimental-acp`); `claude acp prompt` resolves a name through it, or takes an inline `--command`/`--arg`.
+- **AgentApi additions this needed:** `AskOptions` gained `abortController` (cancellation), `mcpServers` (client-supplied servers, merged in `resolveToolOptions` with the sandbox server winning its name), `onToolResult`, and an optional details argument on `onToolUse` carrying the tool-use id and input — enough to emit ACP tool calls that clients can complete and locate.
+
+**8. Sessions (session-api.ts + commands/claude/session/):**
 
 The SDK persists every `query()` run as a session transcript under `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`. `AgentApi.ask()` accepts `resume` (session ID), `continueSession`, and `forkSession` options (mapped to the SDK's `resume`/`continue`/`forkSession` query options) and reports the run's `session_id` back as `sessionId` in `AskResult`, so any `ask`/`run` output contains the ID needed to return to that conversation. `ask` exposes these as `--resume <id>`, `--continue`, and `--fork-session`; `session resume <id> <prompt>` resumes through the same `ask()` path (with `--fork` to branch instead of appending). The remaining `session` commands (`session` = list, `show`, `delete`, `rename`, `tag`, `fork`) operate on transcripts directly via the SDK session functions wrapped in `session-api.ts` — no agent run and no profile/API key required. `session` (list) defaults to the current directory's project; pass `--all` for every project.
 

@@ -260,6 +260,91 @@ describe('AgentApi', () => {
       expect(result.success).to.be.false
       expect(String(result.error)).to.include('result')
     })
+
+    it('reports tool-use id and input alongside the tool name', async () => {
+      const queryFn = makeQueryStub([
+        {
+          // eslint-disable-next-line camelcase
+          message: {content: [{id: 'call_1', input: {file_path: '/repo/a.ts'}, name: 'Read'}]},
+          type: 'assistant',
+        },
+        {result: 'Done', subtype: 'success', type: 'result'},
+      ])
+
+      const seen: any[] = []
+      const api = new AgentApi(config, queryFn)
+      await api.ask('hi', {onToolUse: (name, details) => seen.push({details, name})})
+
+      // eslint-disable-next-line camelcase
+      expect(seen).to.deep.equal([{details: {id: 'call_1', input: {file_path: '/repo/a.ts'}}, name: 'Read'}])
+    })
+
+    it('reports tool results from the following user message', async () => {
+      const queryFn = makeQueryStub([
+        {message: {content: [{id: 'call_1', name: 'Read'}]}, type: 'assistant'},
+        {
+          message: {
+            content: [
+              // eslint-disable-next-line camelcase
+              {content: [{text: 'file body', type: 'text'}], tool_use_id: 'call_1', type: 'tool_result'},
+            ],
+          },
+          type: 'user',
+        },
+        {result: 'Done', subtype: 'success', type: 'result'},
+      ])
+
+      const results: any[] = []
+      const api = new AgentApi(config, queryFn)
+      await api.ask('hi', {onToolResult: (result) => results.push(result)})
+
+      expect(results).to.deep.equal([{content: 'file body', isError: false, toolUseId: 'call_1'}])
+    })
+
+    it('flags an errored tool result and accepts a plain string body', async () => {
+      const queryFn = makeQueryStub([
+        {
+          message: {
+            // eslint-disable-next-line camelcase
+            content: [{content: 'boom', is_error: true, tool_use_id: 'call_9', type: 'tool_result'}],
+          },
+          type: 'user',
+        },
+        {result: 'Done', subtype: 'success', type: 'result'},
+      ])
+
+      const results: any[] = []
+      const api = new AgentApi(config, queryFn)
+      await api.ask('hi', {onToolResult: (result) => results.push(result)})
+
+      expect(results).to.deep.equal([{content: 'boom', isError: true, toolUseId: 'call_9'}])
+    })
+
+    it('passes an abort controller and external MCP servers to the query', async () => {
+      const queryFn = makeQueryStub([{result: 'Done', subtype: 'success', type: 'result'}])
+      const abortController = new AbortController()
+      const mcpServers = {peer: {command: 'peer-mcp', type: 'stdio' as const}}
+
+      const api = new AgentApi(config, queryFn)
+      await api.ask('hi', {abortController, mcpServers})
+
+      const {options} = queryFn.firstCall.args[0]
+      expect(options.abortController).to.equal(abortController)
+      expect(options.mcpServers).to.deep.equal(mcpServers)
+    })
+
+    it('keeps the sandbox MCP server when external servers are also supplied', async () => {
+      const queryFn = makeQueryStub([{result: 'Done', subtype: 'success', type: 'result'}])
+
+      const api = new AgentApi(config, queryFn)
+      await api.ask('hi', {
+        mcpServers: {peer: {command: 'peer-mcp', type: 'stdio'}},
+        sandboxExec: async () => ({exitCode: 0, stderr: '', stdout: ''}),
+      })
+
+      const {options} = queryFn.firstCall.args[0]
+      expect(Object.keys(options.mcpServers).sort()).to.deep.equal(['peer', 'workspace-bash'])
+    })
   })
 
   describe('chat', () => {
